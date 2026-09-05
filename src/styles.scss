@@ -1,0 +1,33 @@
+// Global styles entry point.
+@use '@angular/material' as mat;
+@use './styles/theme' as theme;
+@use './styles/tokens';
+
+@include mat.core();
+
+html {
+  @include mat.all-component-themes(theme.$devboard-theme);
+}
+
+// Applied when the user (or Settings > Appearance) sets data-theme="dark"
+// on the root element. Wrapped in :root so it only overrides Material's
+// tokens, leaving the light theme above as the default.
+:root[data-theme='dark'] {
+  @include mat.all-component-colors(theme.$devboard-theme-dark);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Roboto, 'Helvetica Neue', sans-serif;
+  background: var(--db-color-bg);
+  color: var(--db-color-text-primary);
+}
+
+* {
+  box-sizing: border-box;
+}

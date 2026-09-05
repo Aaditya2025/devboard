@@ -1,0 +1,38 @@
+@use '@angular/material' as mat;
+
+// Custom M3 theme for DevBoard. Built from Material's system palettes so
+// Material components (buttons, dialogs, form fields, snackbar, etc.) stay
+// visually consistent with the hand-authored tokens in _tokens.scss.
+$devboard-theme: mat.define-theme(
+  (
+    color: (
+      theme-type: light,
+      primary: mat.$violet-palette,
+      tertiary: mat.$cyan-palette,
+    ),
+    typography: (
+      brand-family: 'Roboto, "Helvetica Neue", sans-serif',
+      plain-family: 'Roboto, "Helvetica Neue", sans-serif',
+    ),
+    density: (
+      scale: 0,
+    ),
+  )
+);
+
+$devboard-theme-dark: mat.define-theme(
+  (
+    color: (
+      theme-type: dark,
+      primary: mat.$violet-palette,
+      tertiary: mat.$cyan-palette,
+    ),
+    typography: (
+      brand-family: 'Roboto, "Helvetica Neue", sans-serif',
+      plain-family: 'Roboto, "Helvetica Neue", sans-serif',
+    ),
+    density: (
+      scale: 0,
+    ),
+  )
+);

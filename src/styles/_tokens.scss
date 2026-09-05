@@ -1,0 +1,68 @@
+// Design tokens for DevBoard.
+// These are exposed as CSS custom properties so both Angular Material
+// components and hand-built components (shared/*, layout/*, features/*)
+// can share a single, consistent visual language.
+:root {
+  // --- Brand / semantic color ---
+  --db-color-primary: #3f51b5;
+  --db-color-primary-hover: #33449a;
+  --db-color-accent: #00838f;
+  --db-color-danger: #d32f2f;
+  --db-color-warning: #ed6c02;
+  --db-color-success: #2e7d32;
+
+  // --- Surfaces ---
+  --db-color-bg: #f5f6fa;
+  --db-color-surface: #ffffff;
+  --db-color-surface-alt: #f0f1f6;
+  --db-color-border: #e0e2ea;
+
+  // --- Text ---
+  --db-color-text-primary: #1a1c23;
+  --db-color-text-secondary: #5f6270;
+  --db-color-text-disabled: #9a9da8;
+
+  // --- Status colors (issue status columns, badges) ---
+  --db-status-backlog: #78909c;
+  --db-status-todo: #5c6bc0;
+  --db-status-in-progress: #fb8c00;
+  --db-status-in-review: #8e24aa;
+  --db-status-done: #43a047;
+
+  // --- Priority colors ---
+  --db-priority-low: #78909c;
+  --db-priority-medium: #1e88e5;
+  --db-priority-high: #fb8c00;
+  --db-priority-critical: #e53935;
+
+  // --- Spacing scale ---
+  --db-space-xs: 4px;
+  --db-space-sm: 8px;
+  --db-space-md: 16px;
+  --db-space-lg: 24px;
+  --db-space-xl: 32px;
+  --db-space-2xl: 48px;
+
+  // --- Radius / elevation ---
+  --db-radius-sm: 4px;
+  --db-radius-md: 8px;
+  --db-radius-lg: 12px;
+  --db-shadow-sm: 0 1px 2px rgba(16, 18, 27, 0.06), 0 1px 3px rgba(16, 18, 27, 0.08);
+  --db-shadow-md: 0 4px 12px rgba(16, 18, 27, 0.08);
+
+  // --- Layout ---
+  --db-sidebar-width: 240px;
+  --db-sidebar-width-collapsed: 64px;
+  --db-navbar-height: 56px;
+}
+
+:root[data-theme='dark'] {
+  --db-color-bg: #14151a;
+  --db-color-surface: #1c1d24;
+  --db-color-surface-alt: #23242c;
+  --db-color-border: #2e2f38;
+
+  --db-color-text-primary: #f0f1f6;
+  --db-color-text-secondary: #b3b5c0;
+  --db-color-text-disabled: #6c6e79;
+}
