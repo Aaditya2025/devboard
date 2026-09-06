@@ -1,0 +1,61 @@
+<div class="sidebar" [class.sidebar--collapsed]="effectiveCollapsed()">
+  <div class="sidebar__brand">
+    <mat-icon class="sidebar__brand-icon">dashboard_customize</mat-icon>
+    @if (!effectiveCollapsed()) {
+      <span class="sidebar__brand-name">DevBoard</span>
+    }
+  </div>
+
+  <mat-nav-list class="sidebar__group" role="navigation" aria-label="Primary">
+    @for (item of primaryItems; track item.path) {
+      <a
+        mat-list-item
+        [routerLink]="item.path"
+        routerLinkActive="sidebar__item--active"
+        [routerLinkActiveOptions]="{ exact: false }"
+        [matTooltip]="effectiveCollapsed() ? item.label : ''"
+        matTooltipPosition="right"
+        (click)="onNavItemClick()"
+      >
+        <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+        @if (!effectiveCollapsed()) {
+          <span matListItemTitle>{{ item.label }}</span>
+        }
+      </a>
+    }
+  </mat-nav-list>
+
+  <div class="sidebar__spacer"></div>
+
+  <mat-divider></mat-divider>
+
+  <mat-nav-list class="sidebar__group" role="navigation" aria-label="Secondary">
+    @for (item of secondaryItems; track item.path) {
+      <a
+        mat-list-item
+        [routerLink]="item.path"
+        routerLinkActive="sidebar__item--active"
+        [matTooltip]="effectiveCollapsed() ? item.label : ''"
+        matTooltipPosition="right"
+        (click)="onNavItemClick()"
+      >
+        <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+        @if (!effectiveCollapsed()) {
+          <span matListItemTitle>{{ item.label }}</span>
+        }
+      </a>
+    }
+  </mat-nav-list>
+
+  @if (!isMobile()) {
+    <button
+      mat-icon-button
+      class="sidebar__collapse-toggle"
+      type="button"
+      [attr.aria-label]="effectiveCollapsed() ? 'Expand sidebar' : 'Collapse sidebar'"
+      (click)="toggleCollapsed()"
+    >
+      <mat-icon>{{ effectiveCollapsed() ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+    </button>
+  }
+</div>
