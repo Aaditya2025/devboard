@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { ActivatedRoute, NavigationEnd, Router, RouterLink, UrlSegment } from '@angular/router';
+import { ActivatedRouteSnapshot, NavigationEnd, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter } from 'rxjs';
 import { MatIconModule } from '@angular/material/icon';
@@ -19,7 +19,6 @@ export interface Breadcrumb {
 })
 export class BreadcrumbsComponent {
   private readonly router = inject(Router);
-  private readonly activatedRoute = inject(ActivatedRoute);
 
   readonly crumbs = signal<Breadcrumb[]>(this.buildCrumbs());
 
@@ -32,24 +31,27 @@ export class BreadcrumbsComponent {
       .subscribe(() => this.crumbs.set(this.buildCrumbs()));
   }
 
+  /**
+   * Walks the fully-resolved RouterStateSnapshot (not the live ActivatedRoute tree).
+   * The live tree's nested-outlet children aren't attached yet when this component
+   * constructs (it renders alongside <router-outlet> inside MainLayoutComponent,
+   * before that outlet's own child route activates) — the snapshot, by contrast,
+   * is resolved for the whole tree up front during navigation.
+   */
   private buildCrumbs(): Breadcrumb[] {
     const crumbs: Breadcrumb[] = [];
-    let route: ActivatedRoute | null = this.activatedRoute.root;
+    let route: ActivatedRouteSnapshot | null = this.router.routerState.snapshot.root;
     let url = '';
 
     while (route) {
-      const child: ActivatedRoute | null = route.children[0] ?? null;
-      if (child) {
-        const segments = child.snapshot.url.map((segment: UrlSegment) => segment.path).filter(Boolean);
-        if (segments.length > 0) {
-          url += `/${segments.join('/')}`;
-        }
-        const title = child.snapshot.title;
-        if (title) {
-          crumbs.push({ label: title.replace(/\s*—\s*DevBoard$/, ''), url });
-        }
+      const segments = route.url.map((segment) => segment.path).filter(Boolean);
+      if (segments.length > 0) {
+        url += `/${segments.join('/')}`;
       }
-      route = child;
+      if (route.title) {
+        crumbs.push({ label: route.title.replace(/\s*—\s*DevBoard$/, ''), url });
+      }
+      route = route.firstChild;
     }
 
     return crumbs;
