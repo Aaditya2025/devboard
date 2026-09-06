@@ -1,0 +1,21 @@
+<mat-sidenav-container class="main-layout">
+  <mat-sidenav
+    class="main-layout__sidenav"
+    [class.main-layout__sidenav--mobile]="isMobile()"
+    [class.main-layout__sidenav--collapsed]="!isMobile() && sidebarCollapsed()"
+    [mode]="isMobile() ? 'over' : 'side'"
+    [opened]="isMobile() ? mobileDrawerOpen() : true"
+    [fixedInViewport]="isMobile()"
+    (openedChange)="onDrawerOpenChange($event)"
+  >
+    <app-sidebar />
+  </mat-sidenav>
+
+  <mat-sidenav-content class="main-layout__content">
+    <app-navbar />
+    <app-breadcrumbs />
+    <main class="main-layout__main">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>
