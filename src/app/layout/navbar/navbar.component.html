@@ -1,0 +1,69 @@
+<mat-toolbar class="navbar">
+  <button
+    mat-icon-button
+    class="navbar__menu-toggle"
+    type="button"
+    aria-label="Toggle navigation menu"
+    (click)="toggleMobileDrawer()"
+  >
+    <mat-icon>menu</mat-icon>
+  </button>
+
+  <a routerLink="/dashboard" class="navbar__brand">
+    <mat-icon>dashboard_customize</mat-icon>
+    <span>DevBoard</span>
+  </a>
+
+  <span class="navbar__spacer"></span>
+
+  <button
+    mat-icon-button
+    class="navbar__search"
+    type="button"
+    aria-label="Search"
+    matTooltip="Search"
+  >
+    <mat-icon>search</mat-icon>
+  </button>
+
+  <button
+    mat-icon-button
+    routerLink="/notifications"
+    aria-label="Notifications"
+    [matBadge]="unreadNotificationCount() > 0 ? unreadNotificationCount() : null"
+    matBadgeColor="warn"
+    matBadgeSize="small"
+  >
+    <mat-icon>notifications</mat-icon>
+  </button>
+
+  <button
+    mat-icon-button
+    class="navbar__user-trigger"
+    type="button"
+    [matMenuTriggerFor]="userMenu"
+    [attr.aria-label]="'Account menu for ' + currentUserName()"
+  >
+    <span class="navbar__avatar">{{ currentUserInitials() }}</span>
+  </button>
+
+  <mat-menu #userMenu="matMenu">
+    <div class="navbar__user-menu-header">
+      <span class="navbar__user-menu-name">{{ currentUserName() }}</span>
+    </div>
+    <mat-divider></mat-divider>
+    <a mat-menu-item routerLink="/profile">
+      <mat-icon>person</mat-icon>
+      <span>Profile</span>
+    </a>
+    <a mat-menu-item routerLink="/settings">
+      <mat-icon>settings</mat-icon>
+      <span>Settings</span>
+    </a>
+    <mat-divider></mat-divider>
+    <button mat-menu-item type="button" (click)="logout()">
+      <mat-icon>logout</mat-icon>
+      <span>Logout</span>
+    </button>
+  </mat-menu>
+</mat-toolbar>

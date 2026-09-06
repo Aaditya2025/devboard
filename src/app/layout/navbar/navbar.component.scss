@@ -1,0 +1,63 @@
+.navbar {
+  height: var(--db-navbar-height);
+  background: var(--db-color-surface);
+  color: var(--db-color-text-primary);
+  border-bottom: 1px solid var(--db-color-border);
+  box-shadow: none;
+  gap: var(--db-space-xs);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.navbar__menu-toggle {
+  display: none;
+
+  @media (max-width: 900px) {
+    display: inline-flex;
+  }
+}
+
+.navbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-sm);
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+
+  mat-icon {
+    color: var(--db-color-primary);
+  }
+
+  @media (min-width: 901px) {
+    // Sidebar already shows the brand on desktop.
+    display: none;
+  }
+}
+
+.navbar__spacer {
+  flex: 1 1 auto;
+}
+
+.navbar__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--db-color-primary);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.navbar__user-menu-header {
+  padding: var(--db-space-sm) var(--db-space-md);
+}
+
+.navbar__user-menu-name {
+  font-weight: 500;
+  color: var(--db-color-text-primary);
+}
