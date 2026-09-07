@@ -18,9 +18,12 @@ API later without UI rewrites.
 - Profile and settings
 - Responsive layout (desktop, tablet, mobile) with light/dark theming groundwork
 
-> **Status:** Phases 1–2 (Foundation, Layout) complete. See [Project Structure](#project-structure)
-> and [Frontend Development Phases](#frontend-development-phases) below for what's implemented vs.
-> planned.
+> **Status:** Phases 1–3 (Foundation, Layout, Authentication) complete. See
+> [Project Structure](#project-structure) and [Frontend Development Phases](#frontend-development-phases)
+> below for what's implemented vs. planned.
+>
+> **Demo login:** `admin@devboard.dev` / `Password123!` (also `dev@devboard.dev`, `viewer@devboard.dev`
+> — same password, different roles).
 
 ## Tech Stack
 
@@ -94,7 +97,7 @@ src/environments/    # apiBaseUrl, useMockData — swapped per build configurati
 
 1. **Foundation** ✅ — project setup, Material, ESLint/Prettier, folder structure, routing, theme
 2. **Layout** ✅ — main layout, sidebar, navbar, breadcrumbs, responsive drawer
-3. **Authentication** — login, register, auth service/state, guards, interceptor
+3. **Authentication** ✅ — login, register, auth service/state, guards, interceptor
 4. **Dashboard** — statistics, charts, recent activity, assigned issues, project progress
 5. **Projects** — list, details, create/edit, members
 6. **Issues** — list, create/edit, details, comments, activity, search/filter/sort/pagination

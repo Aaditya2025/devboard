@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -8,6 +8,7 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { LayoutService } from '../../core/services/layout.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   selector: 'app-navbar',
@@ -28,10 +29,20 @@ import { LayoutService } from '../../core/services/layout.service';
 })
 export class NavbarComponent {
   private readonly layout = inject(LayoutService);
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
 
-  // Placeholder values — replaced by real AuthService / NotificationService in Phase 3 / 8.
-  readonly currentUserName = signal('Aditya Sharma');
-  readonly currentUserInitials = signal('AS');
+  readonly currentUser = this.authService.currentUser;
+  readonly currentUserName = computed(() => {
+    const user = this.currentUser();
+    return user ? `${user.firstName} ${user.lastName}` : '';
+  });
+  readonly currentUserInitials = computed(() => {
+    const user = this.currentUser();
+    return user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : '';
+  });
+
+  // Real unread count wired up in Phase 8 (Notifications) via NotificationService.
   readonly unreadNotificationCount = signal(3);
 
   toggleMobileDrawer(): void {
@@ -39,6 +50,7 @@ export class NavbarComponent {
   }
 
   logout(): void {
-    // Phase 3 will call AuthService.logout() and redirect to /login here.
+    this.authService.logout();
+    this.router.navigateByUrl('/login');
   }
 }

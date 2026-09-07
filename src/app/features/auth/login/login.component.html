@@ -1,0 +1,60 @@
+<h1 class="login__title">Sign in</h1>
+<p class="login__subtitle">Welcome back to DevBoard.</p>
+
+<form [formGroup]="form" (ngSubmit)="submit()" class="login__form" novalidate>
+  <mat-form-field appearance="outline" class="login__field">
+    <mat-label>Email</mat-label>
+    <input matInput type="email" formControlName="email" autocomplete="email" required />
+  </mat-form-field>
+  <app-form-error [control]="form.controls.email" label="Email" />
+
+  <mat-form-field appearance="outline" class="login__field">
+    <mat-label>Password</mat-label>
+    <input
+      matInput
+      [type]="hidePassword() ? 'password' : 'text'"
+      formControlName="password"
+      autocomplete="current-password"
+      required
+    />
+    <button
+      mat-icon-button
+      matSuffix
+      type="button"
+      [attr.aria-label]="hidePassword() ? 'Show password' : 'Hide password'"
+      (click)="togglePasswordVisibility()"
+    >
+      <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+    </button>
+  </mat-form-field>
+  <app-form-error [control]="form.controls.password" label="Password" />
+
+  <div class="login__row">
+    <mat-checkbox formControlName="rememberMe">Remember me</mat-checkbox>
+    <button type="button" class="login__forgot" (click)="onForgotPassword()">
+      Forgot password?
+    </button>
+  </div>
+
+  @if (errorMessage()) {
+    <div class="login__error" role="alert">{{ errorMessage() }}</div>
+  }
+
+  <button
+    mat-flat-button
+    color="primary"
+    type="submit"
+    class="login__submit"
+    [disabled]="loading()"
+  >
+    @if (loading()) {
+      <mat-progress-spinner diameter="20" mode="indeterminate" />
+    } @else {
+      Sign in
+    }
+  </button>
+</form>
+
+<p class="login__footer">
+  Don't have an account? <a routerLink="/register">Create one</a>
+</p>

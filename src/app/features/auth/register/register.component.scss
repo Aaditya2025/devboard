@@ -1,0 +1,60 @@
+.register__title {
+  margin: 0 0 4px;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.register__subtitle {
+  margin: 0 0 var(--db-space-lg);
+  color: var(--db-color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.register__form {
+  display: flex;
+  flex-direction: column;
+}
+
+.register__name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--db-space-md);
+}
+
+.register__field {
+  width: 100%;
+}
+
+.register__error {
+  background: color-mix(in srgb, var(--db-color-danger) 10%, transparent);
+  color: var(--db-color-danger);
+  border-radius: var(--db-radius-sm);
+  padding: var(--db-space-sm) var(--db-space-md);
+  font-size: 0.85rem;
+  margin-bottom: var(--db-space-md);
+}
+
+.register__submit {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--db-space-sm);
+}
+
+.register__footer {
+  margin: var(--db-space-lg) 0 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--db-color-text-secondary);
+
+  a {
+    color: var(--db-color-primary);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

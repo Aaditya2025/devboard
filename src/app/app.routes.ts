@@ -8,13 +8,9 @@ export const routes: Routes = [
     pathMatch: 'full',
     redirectTo: 'dashboard',
   },
-  // Auth routes use their own (currently minimal) layout — no sidebar/navbar.
+  // Auth routes use their own (AuthLayoutComponent) layout — no sidebar/navbar.
   {
-    path: 'login',
-    loadChildren: () => import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
-  },
-  {
-    path: 'register',
+    path: '',
     loadChildren: () => import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
   },
   // Everything else is authenticated and shares the main app shell
