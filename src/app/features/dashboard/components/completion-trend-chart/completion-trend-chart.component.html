@@ -1,0 +1,27 @@
+<div class="trend-chart">
+  @if (total() === 0) {
+    <p class="trend-chart__empty">No issues completed in the last 7 days.</p>
+  } @else {
+    <svg
+      [attr.viewBox]="'0 0 ' + width + ' ' + height"
+      class="trend-chart__svg"
+      role="img"
+      aria-label="Issue completion trend over the last 7 days"
+    >
+      <polyline
+        [attr.points]="polylinePoints()"
+        fill="none"
+        stroke="var(--db-color-primary)"
+        stroke-width="2"
+      />
+      @for (dot of dots(); track $index) {
+        <circle [attr.cx]="dot.x" [attr.cy]="dot.y" r="2.5" fill="var(--db-color-primary)" />
+      }
+    </svg>
+    <div class="trend-chart__labels">
+      @for (label of dayLabels(); track $index) {
+        <span>{{ label }}</span>
+      }
+    </div>
+  }
+</div>

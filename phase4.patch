@@ -1,0 +1,2211 @@
+diff --git a/README.md b/README.md
+index 53394c2..646f34d 100644
+--- a/README.md
++++ b/README.md
+@@ -18,7 +18,7 @@ API later without UI rewrites.
+ - Profile and settings
+ - Responsive layout (desktop, tablet, mobile) with light/dark theming groundwork
+ 
+-> **Status:** Phases 1–3 (Foundation, Layout, Authentication) complete. See
++> **Status:** Phases 1–4 (Foundation, Layout, Authentication, Dashboard) complete. See
+ > [Project Structure](#project-structure) and [Frontend Development Phases](#frontend-development-phases)
+ > below for what's implemented vs. planned.
+ >
+@@ -98,7 +98,7 @@ src/environments/    # apiBaseUrl, useMockData — swapped per build configurati
+ 1. **Foundation** ✅ — project setup, Material, ESLint/Prettier, folder structure, routing, theme
+ 2. **Layout** ✅ — main layout, sidebar, navbar, breadcrumbs, responsive drawer
+ 3. **Authentication** ✅ — login, register, auth service/state, guards, interceptor
+-4. **Dashboard** — statistics, charts, recent activity, assigned issues, project progress
++4. **Dashboard** ✅ — statistics, charts, recent activity, assigned issues, project progress
+ 5. **Projects** — list, details, create/edit, members
+ 6. **Issues** — list, create/edit, details, comments, activity, search/filter/sort/pagination
+ 7. **Kanban** — board, columns, drag-and-drop, filtering
+diff --git a/src/app/core/mock/activities.mock.ts b/src/app/core/mock/activities.mock.ts
+new file mode 100644
+index 0000000..7484956
+--- /dev/null
++++ b/src/app/core/mock/activities.mock.ts
+@@ -0,0 +1,71 @@
++import { Activity } from '../models';
++
++/** Minutes-ago offset from "now", so relative-time formatting always looks live regardless of when this app is actually run. */
++function minutesAgo(minutes: number): string {
++  return new Date(Date.now() - minutes * 60_000).toISOString();
++}
++
++export const MOCK_ACTIVITIES: Activity[] = [
++  {
++    id: 'activity-1',
++    userId: 'user-1',
++    userName: 'Aditya Sharma',
++    action: 'changed status',
++    entityType: 'ISSUE',
++    entityId: 'issue-1',
++    entityLabel: 'DEV-101',
++    detail: 'Todo → In Progress',
++    createdDate: minutesAgo(4),
++  },
++  {
++    id: 'activity-2',
++    userId: 'user-2',
++    userName: 'Rahul Verma',
++    action: 'added a comment',
++    entityType: 'ISSUE',
++    entityId: 'issue-4',
++    entityLabel: 'BILL-45',
++    createdDate: minutesAgo(37),
++  },
++  {
++    id: 'activity-3',
++    userId: 'user-1',
++    userName: 'Aditya Sharma',
++    action: 'created the issue',
++    entityType: 'ISSUE',
++    entityId: 'issue-8',
++    entityLabel: 'DEV-104',
++    createdDate: minutesAgo(95),
++  },
++  {
++    id: 'activity-4',
++    userId: 'user-3',
++    userName: 'Priya Nair',
++    action: 'assigned issue to',
++    entityType: 'ISSUE',
++    entityId: 'issue-7',
++    entityLabel: 'DS-8',
++    detail: 'Priya Nair',
++    createdDate: minutesAgo(60 * 5),
++  },
++  {
++    id: 'activity-5',
++    userId: 'user-1',
++    userName: 'Aditya Sharma',
++    action: 'marked issue as done',
++    entityType: 'ISSUE',
++    entityId: 'issue-3',
++    entityLabel: 'DEV-103',
++    createdDate: minutesAgo(60 * 26),
++  },
++  {
++    id: 'activity-6',
++    userId: 'user-2',
++    userName: 'Rahul Verma',
++    action: 'moved issue to review',
++    entityType: 'ISSUE',
++    entityId: 'issue-4',
++    entityLabel: 'BILL-45',
++    createdDate: minutesAgo(60 * 72),
++  },
++];
+diff --git a/src/app/core/mock/issues.mock.ts b/src/app/core/mock/issues.mock.ts
+new file mode 100644
+index 0000000..ca48550
+--- /dev/null
++++ b/src/app/core/mock/issues.mock.ts
+@@ -0,0 +1,179 @@
++import { IssuePriority, IssueStatus } from '../enums';
++import { Issue } from '../models';
++
++const LABELS = {
++  bug: { id: 'label-bug', name: 'bug', color: '#e53935' },
++  feature: { id: 'label-feature', name: 'feature', color: '#1e88e5' },
++  chore: { id: 'label-chore', name: 'chore', color: '#78909c' },
++  ux: { id: 'label-ux', name: 'ux', color: '#8e24aa' },
++};
++
++/** Day-offset from "today" (negative = past, positive = future), so demo data (and the dashboard's completion trend) always looks current regardless of when this app is actually run. */
++function daysFromToday(offset: number): string {
++  const date = new Date();
++  date.setDate(date.getDate() + offset);
++  return date.toISOString().slice(0, 10);
++}
++
++export const MOCK_ISSUES: Issue[] = [
++  {
++    id: 'issue-1',
++    key: 'DEV-101',
++    title: 'Login API returning 401 for valid sessions',
++    description: 'Users with an active session are intermittently logged out with a 401.',
++    projectId: 'proj-1',
++    status: IssueStatus.InProgress,
++    priority: IssuePriority.Critical,
++    assigneeId: 'user-1',
++    reporterId: 'user-2',
++    labels: [LABELS.bug],
++    sprintId: 'sprint-1',
++    createdDate: daysFromToday(-12),
++    updatedDate: daysFromToday(-2),
++    dueDate: daysFromToday(3),
++  },
++  {
++    id: 'issue-2',
++    key: 'DEV-102',
++    title: 'Add drag-and-drop reordering to Kanban columns',
++    description: 'Allow reordering issues within a column, not just between columns.',
++    projectId: 'proj-1',
++    status: IssueStatus.Todo,
++    priority: IssuePriority.Medium,
++    assigneeId: 'user-1',
++    reporterId: 'user-1',
++    labels: [LABELS.feature],
++    sprintId: 'sprint-1',
++    createdDate: daysFromToday(-10),
++    updatedDate: daysFromToday(-10),
++    dueDate: null,
++  },
++  {
++    id: 'issue-3',
++    key: 'DEV-103',
++    title: 'Breadcrumbs crash on nested lazy routes',
++    description: 'Fixed — keep a regression test around this.',
++    projectId: 'proj-1',
++    status: IssueStatus.Done,
++    priority: IssuePriority.High,
++    assigneeId: 'user-1',
++    reporterId: 'user-1',
++    labels: [LABELS.bug],
++    sprintId: 'sprint-1',
++    createdDate: daysFromToday(-7),
++    updatedDate: daysFromToday(0),
++    dueDate: daysFromToday(0),
++  },
++  {
++    id: 'issue-4',
++    key: 'BILL-45',
++    title: 'Prorate plan upgrades mid-cycle',
++    description: 'Upgrading mid-billing-cycle should prorate the charge.',
++    projectId: 'proj-2',
++    status: IssueStatus.InReview,
++    priority: IssuePriority.High,
++    assigneeId: 'user-2',
++    reporterId: 'user-1',
++    labels: [LABELS.feature],
++    sprintId: 'sprint-2',
++    createdDate: daysFromToday(-14),
++    updatedDate: daysFromToday(-1),
++    dueDate: daysFromToday(5),
++  },
++  {
++    id: 'issue-5',
++    key: 'BILL-46',
++    title: 'Invoice PDF export throws on unicode company names',
++    description: 'Non-Latin company names break PDF generation.',
++    projectId: 'proj-2',
++    status: IssueStatus.Backlog,
++    priority: IssuePriority.Medium,
++    assigneeId: 'user-1',
++    reporterId: 'user-2',
++    labels: [LABELS.bug],
++    sprintId: null,
++    createdDate: daysFromToday(-5),
++    updatedDate: daysFromToday(-5),
++    dueDate: null,
++  },
++  {
++    id: 'issue-6',
++    key: 'MOB-12',
++    title: 'Scaffold React Native navigation shell',
++    description: 'Set up the tab/stack navigation skeleton.',
++    projectId: 'proj-3',
++    status: IssueStatus.Backlog,
++    priority: IssuePriority.Low,
++    assigneeId: 'user-1',
++    reporterId: 'user-1',
++    labels: [LABELS.chore],
++    sprintId: null,
++    createdDate: daysFromToday(-3),
++    updatedDate: daysFromToday(-3),
++    dueDate: null,
++  },
++  {
++    id: 'issue-7',
++    key: 'DS-8',
++    title: 'Audit color contrast across all badge variants',
++    description: 'Some priority badge colors fail WCAG AA against white text.',
++    projectId: 'proj-4',
++    status: IssueStatus.InProgress,
++    priority: IssuePriority.Medium,
++    assigneeId: 'user-3',
++    reporterId: 'user-1',
++    labels: [LABELS.ux],
++    sprintId: null,
++    createdDate: daysFromToday(-9),
++    updatedDate: daysFromToday(-1),
++    dueDate: daysFromToday(6),
++  },
++  {
++    id: 'issue-8',
++    key: 'DEV-104',
++    title: 'Debounce issue search input',
++    description: 'Search currently fires a request per keystroke.',
++    projectId: 'proj-1',
++    status: IssueStatus.Todo,
++    priority: IssuePriority.Low,
++    assigneeId: null,
++    reporterId: 'user-1',
++    labels: [LABELS.chore],
++    sprintId: 'sprint-1',
++    createdDate: daysFromToday(-1),
++    updatedDate: daysFromToday(-1),
++    dueDate: null,
++  },
++  {
++    id: 'issue-9',
++    key: 'DEV-105',
++    title: 'Extract shared date range validator',
++    description: 'Project form and sprint form both need "end after start" validation.',
++    projectId: 'proj-1',
++    status: IssueStatus.Done,
++    priority: IssuePriority.Low,
++    assigneeId: 'user-1',
++    reporterId: 'user-1',
++    labels: [LABELS.chore],
++    sprintId: 'sprint-1',
++    createdDate: daysFromToday(-4),
++    updatedDate: daysFromToday(-1),
++    dueDate: daysFromToday(-1),
++  },
++  {
++    id: 'issue-10',
++    key: 'BILL-47',
++    title: 'Add usage-based billing tier',
++    description: 'Support metered pricing alongside flat-rate plans.',
++    projectId: 'proj-2',
++    status: IssueStatus.Done,
++    priority: IssuePriority.Medium,
++    assigneeId: 'user-2',
++    reporterId: 'user-1',
++    labels: [LABELS.feature],
++    sprintId: 'sprint-2',
++    createdDate: daysFromToday(-6),
++    updatedDate: daysFromToday(-3),
++    dueDate: daysFromToday(-3),
++  },
++];
+diff --git a/src/app/core/mock/projects.mock.ts b/src/app/core/mock/projects.mock.ts
+new file mode 100644
+index 0000000..8a64a01
+--- /dev/null
++++ b/src/app/core/mock/projects.mock.ts
+@@ -0,0 +1,61 @@
++import { ProjectStatus } from '../enums';
++import { Project } from '../models';
++
++export const MOCK_PROJECTS: Project[] = [
++  {
++    id: 'proj-1',
++    organizationId: 'org-1',
++    name: 'DevBoard Core',
++    key: 'DEV',
++    description: 'The main issue tracker and Kanban experience.',
++    status: ProjectStatus.Active,
++    startDate: '2025-11-01',
++    endDate: '2026-03-31',
++    progress: 62,
++    memberCount: 5,
++    issueCount: 24,
++    createdDate: '2025-11-01',
++  },
++  {
++    id: 'proj-2',
++    organizationId: 'org-1',
++    name: 'Billing Platform',
++    key: 'BILL',
++    description: 'Subscription billing, invoicing, and plan management.',
++    status: ProjectStatus.Active,
++    startDate: '2025-12-01',
++    endDate: '2026-04-30',
++    progress: 34,
++    memberCount: 4,
++    issueCount: 18,
++    createdDate: '2025-12-01',
++  },
++  {
++    id: 'proj-3',
++    organizationId: 'org-1',
++    name: 'Mobile App',
++    key: 'MOB',
++    description: 'iOS and Android companion apps.',
++    status: ProjectStatus.Planning,
++    startDate: '2026-02-01',
++    endDate: '2026-08-31',
++    progress: 8,
++    memberCount: 3,
++    issueCount: 9,
++    createdDate: '2026-01-20',
++  },
++  {
++    id: 'proj-4',
++    organizationId: 'org-1',
++    name: 'Design System',
++    key: 'DS',
++    description: 'Shared component library and design tokens.',
++    status: ProjectStatus.OnHold,
++    startDate: '2025-09-01',
++    endDate: '2026-01-31',
++    progress: 71,
++    memberCount: 2,
++    issueCount: 12,
++    createdDate: '2025-09-01',
++  },
++];
+diff --git a/src/app/core/services/dashboard.service.spec.ts b/src/app/core/services/dashboard.service.spec.ts
+new file mode 100644
+index 0000000..435c426
+--- /dev/null
++++ b/src/app/core/services/dashboard.service.spec.ts
+@@ -0,0 +1,87 @@
++import { TestBed } from '@angular/core/testing';
++import { DashboardService } from './dashboard.service';
++import { IssuePriority, IssueStatus } from '../enums';
++
++describe('DashboardService', () => {
++  let service: DashboardService;
++
++  beforeEach(() => {
++    TestBed.configureTestingModule({});
++    service = TestBed.inject(DashboardService);
++  });
++
++  it('aggregates total, completed, in-progress and high-priority issue counts', (done) => {
++    service.getStatistics().subscribe((stats) => {
++      expect(stats.totalIssues).toBeGreaterThan(0);
++      expect(stats.completedIssues).toBe(stats.issuesByStatus[IssueStatus.Done]);
++      expect(stats.inProgressIssues).toBe(stats.issuesByStatus[IssueStatus.InProgress]);
++      expect(stats.highPriorityIssues).toBe(
++        stats.issuesByPriority[IssuePriority.High] + stats.issuesByPriority[IssuePriority.Critical],
++      );
++      done();
++    });
++  });
++
++  it('counts issues across every status and priority bucket, including zero-count ones', (done) => {
++    service.getStatistics().subscribe((stats) => {
++      for (const status of Object.values(IssueStatus)) {
++        expect(stats.issuesByStatus[status]).toBeDefined();
++      }
++      for (const priority of Object.values(IssuePriority)) {
++        expect(stats.issuesByPriority[priority]).toBeDefined();
++      }
++      done();
++    });
++  });
++
++  it('sums issuesByStatus back up to totalIssues', (done) => {
++    service.getStatistics().subscribe((stats) => {
++      const sum = Object.values(stats.issuesByStatus).reduce((a, b) => a + b, 0);
++      expect(sum).toBe(stats.totalIssues);
++      done();
++    });
++  });
++
++  it('includes progress for every mock project', (done) => {
++    service.getStatistics().subscribe((stats) => {
++      expect(stats.projectProgress.length).toBeGreaterThan(0);
++      for (const project of stats.projectProgress) {
++        expect(project.progress).toBeGreaterThanOrEqual(0);
++        expect(project.progress).toBeLessThanOrEqual(100);
++      }
++      done();
++    });
++  });
++
++  it('returns exactly 7 days of completion trend data', (done) => {
++    service.getStatistics().subscribe((stats) => {
++      expect(stats.completionTrend.length).toBe(7);
++      done();
++    });
++  });
++
++  it('returns only issues assigned to the given user', (done) => {
++    service.getAssignedIssues('user-1').subscribe((issues) => {
++      expect(issues.length).toBeGreaterThan(0);
++      expect(issues.every((issue) => issue.assigneeId === 'user-1')).toBe(true);
++      done();
++    });
++  });
++
++  it('returns an empty array for a user with no assigned issues', (done) => {
++    service.getAssignedIssues('nonexistent-user').subscribe((issues) => {
++      expect(issues).toEqual([]);
++      done();
++    });
++  });
++
++  it('returns recent activity sorted newest first, respecting the limit', (done) => {
++    service.getRecentActivity(3).subscribe((activity) => {
++      expect(activity.length).toBe(3);
++      const timestamps = activity.map((a) => new Date(a.createdDate).getTime());
++      const sorted = [...timestamps].sort((a, b) => b - a);
++      expect(timestamps).toEqual(sorted);
++      done();
++    });
++  });
++});
+diff --git a/src/app/core/services/dashboard.service.ts b/src/app/core/services/dashboard.service.ts
+new file mode 100644
+index 0000000..73baa8a
+--- /dev/null
++++ b/src/app/core/services/dashboard.service.ts
+@@ -0,0 +1,102 @@
++import { Injectable, inject } from '@angular/core';
++import { Observable, forkJoin, map } from 'rxjs';
++import { IssuePriority, IssueStatus } from '../enums';
++import { Activity, DashboardStatistics, Issue, Project } from '../models';
++import { ProjectService } from './project.service';
++import { IssueService } from './issue.service';
++import { MOCK_ACTIVITIES } from '../mock/activities.mock';
++
++const MOCK_LATENCY_MS = 400;
++
++@Injectable({ providedIn: 'root' })
++export class DashboardService {
++  private readonly projectService = inject(ProjectService);
++  private readonly issueService = inject(IssueService);
++
++  /**
++   * Aggregates statistics from issues + projects. Once a real backend exists
++   * (Phase 11) this becomes a single `GET /dashboard/statistics` call — the
++   * aggregation logic here moves server-side, but the returned shape (and
++   * therefore every component consuming it) stays the same.
++   */
++  getStatistics(): Observable<DashboardStatistics> {
++    return forkJoin({
++      issues: this.issueService.getAll(),
++      projects: this.projectService.getAll(),
++    }).pipe(map(({ issues, projects }) => this.buildStatistics(issues, projects)));
++  }
++
++  getAssignedIssues(userId: string): Observable<Issue[]> {
++    return this.issueService.getAssignedTo(userId);
++  }
++
++  getRecentActivity(limit = 6): Observable<Activity[]> {
++    return new Observable<Activity[]>((subscriber) => {
++      const timeout = setTimeout(() => {
++        const sorted = [...MOCK_ACTIVITIES].sort(
++          (a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime(),
++        );
++        subscriber.next(sorted.slice(0, limit));
++        subscriber.complete();
++      }, MOCK_LATENCY_MS);
++      return () => clearTimeout(timeout);
++    });
++  }
++
++  private buildStatistics(issues: Issue[], projects: Project[]): DashboardStatistics {
++    const issuesByStatus = this.countBy(issues, (issue) => issue.status, Object.values(IssueStatus));
++    const issuesByPriority = this.countBy(
++      issues,
++      (issue) => issue.priority,
++      Object.values(IssuePriority),
++    );
++
++    return {
++      totalIssues: issues.length,
++      completedIssues: issuesByStatus[IssueStatus.Done] ?? 0,
++      inProgressIssues: issuesByStatus[IssueStatus.InProgress] ?? 0,
++      highPriorityIssues:
++        (issuesByPriority[IssuePriority.High] ?? 0) + (issuesByPriority[IssuePriority.Critical] ?? 0),
++      issuesByStatus,
++      issuesByPriority,
++      projectProgress: projects.map((project) => ({
++        projectId: project.id,
++        projectName: project.name,
++        progress: project.progress,
++      })),
++      completionTrend: this.buildCompletionTrend(issues),
++    };
++  }
++
++  private countBy<T, K extends string>(
++    items: T[],
++    keyFn: (item: T) => K,
++    allKeys: K[],
++  ): Record<K, number> {
++    const counts = Object.fromEntries(allKeys.map((key) => [key, 0])) as Record<K, number>;
++    for (const item of items) {
++      counts[keyFn(item)] += 1;
++    }
++    return counts;
++  }
++
++  /** Last 7 days of completed-issue counts, derived from each issue's updatedDate. */
++  private buildCompletionTrend(issues: Issue[]): { date: string; completed: number }[] {
++    const days: { date: string; completed: number }[] = [];
++    const doneIssues = issues.filter((issue) => issue.status === IssueStatus.Done);
++
++    for (let offset = 6; offset >= 0; offset--) {
++      const day = new Date();
++      day.setDate(day.getDate() - offset);
++      const dateKey = day.toISOString().slice(0, 10);
++
++      const completed = doneIssues.filter(
++        (issue) => issue.updatedDate.slice(0, 10) === dateKey,
++      ).length;
++
++      days.push({ date: dateKey, completed });
++    }
++
++    return days;
++  }
++}
+diff --git a/src/app/core/services/issue.service.ts b/src/app/core/services/issue.service.ts
+new file mode 100644
+index 0000000..a7e70d0
+--- /dev/null
++++ b/src/app/core/services/issue.service.ts
+@@ -0,0 +1,35 @@
++import { Injectable } from '@angular/core';
++import { Observable } from 'rxjs';
++import { Issue } from '../models';
++import { MOCK_ISSUES } from '../mock/issues.mock';
++
++const MOCK_LATENCY_MS = 400;
++
++/**
++ * Reads/writes issue data. Backed by the mock store for now — swapped for
++ * real HTTP calls in Phase 11. Filtering/sorting/pagination (Phase 6) will
++ * extend this service; kept intentionally minimal here since Phase 4 only
++ * needs read access for dashboard statistics.
++ */
++@Injectable({ providedIn: 'root' })
++export class IssueService {
++  getAll(): Observable<Issue[]> {
++    return new Observable<Issue[]>((subscriber) => {
++      const timeout = setTimeout(() => {
++        subscriber.next([...MOCK_ISSUES]);
++        subscriber.complete();
++      }, MOCK_LATENCY_MS);
++      return () => clearTimeout(timeout);
++    });
++  }
++
++  getAssignedTo(userId: string): Observable<Issue[]> {
++    return new Observable<Issue[]>((subscriber) => {
++      const timeout = setTimeout(() => {
++        subscriber.next(MOCK_ISSUES.filter((issue) => issue.assigneeId === userId));
++        subscriber.complete();
++      }, MOCK_LATENCY_MS);
++      return () => clearTimeout(timeout);
++    });
++  }
++}
+diff --git a/src/app/core/services/project.service.ts b/src/app/core/services/project.service.ts
+new file mode 100644
+index 0000000..244cb00
+--- /dev/null
++++ b/src/app/core/services/project.service.ts
+@@ -0,0 +1,35 @@
++import { Injectable } from '@angular/core';
++import { Observable } from 'rxjs';
++import { Project } from '../models';
++import { MOCK_PROJECTS } from '../mock/projects.mock';
++
++/** Simulated network latency so loading states are visible/testable on mock data. */
++const MOCK_LATENCY_MS = 400;
++
++/**
++ * Reads/writes project data. Backed by the mock store for now — swapped for
++ * real `GET/POST /projects` HTTP calls in Phase 11 without changing this
++ * service's public shape, so consuming components don't need to change.
++ */
++@Injectable({ providedIn: 'root' })
++export class ProjectService {
++  getAll(): Observable<Project[]> {
++    return new Observable<Project[]>((subscriber) => {
++      const timeout = setTimeout(() => {
++        subscriber.next([...MOCK_PROJECTS]);
++        subscriber.complete();
++      }, MOCK_LATENCY_MS);
++      return () => clearTimeout(timeout);
++    });
++  }
++
++  getById(id: string): Observable<Project | undefined> {
++    return new Observable<Project | undefined>((subscriber) => {
++      const timeout = setTimeout(() => {
++        subscriber.next(MOCK_PROJECTS.find((project) => project.id === id));
++        subscriber.complete();
++      }, MOCK_LATENCY_MS);
++      return () => clearTimeout(timeout);
++    });
++  }
++}
+diff --git a/src/app/features/dashboard/components/assigned-issues-table/assigned-issues-table.component.html b/src/app/features/dashboard/components/assigned-issues-table/assigned-issues-table.component.html
+new file mode 100644
+index 0000000..b1e01c7
+--- /dev/null
++++ b/src/app/features/dashboard/components/assigned-issues-table/assigned-issues-table.component.html
+@@ -0,0 +1,14 @@
++@if (issues.length === 0) {
++  <app-empty-state icon="task_alt" message="No issues assigned to you." hint="Nice and clear!" />
++} @else {
++  <div class="issues-table" role="table">
++    @for (issue of issues; track issue.id) {
++      <a class="issues-table__row" role="row" [routerLink]="['/issues', issue.id]">
++        <span class="issues-table__key">{{ issue.key }}</span>
++        <span class="issues-table__title">{{ issue.title }}</span>
++        <app-status-badge [status]="issue.status" />
++        <app-priority-badge [priority]="issue.priority" />
++      </a>
++    }
++  </div>
++}
+diff --git a/src/app/features/dashboard/components/assigned-issues-table/assigned-issues-table.component.scss b/src/app/features/dashboard/components/assigned-issues-table/assigned-issues-table.component.scss
+new file mode 100644
+index 0000000..67c18f2
+--- /dev/null
++++ b/src/app/features/dashboard/components/assigned-issues-table/assigned-issues-table.component.scss
+@@ -0,0 +1,38 @@
++.issues-table {
++  display: flex;
++  flex-direction: column;
++}
++
++.issues-table__row {
++  display: grid;
++  grid-template-columns: 72px 1fr auto auto;
++  align-items: center;
++  gap: var(--db-space-md);
++  padding: var(--db-space-sm) 4px;
++  border-bottom: 1px solid var(--db-color-border);
++  text-decoration: none;
++  color: inherit;
++  border-radius: var(--db-radius-sm);
++
++  &:last-child {
++    border-bottom: none;
++  }
++
++  &:hover {
++    background: var(--db-color-surface-alt);
++  }
++}
++
++.issues-table__key {
++  font-size: 0.75rem;
++  font-weight: 600;
++  color: var(--db-color-text-secondary);
++}
++
++.issues-table__title {
++  font-size: 0.85rem;
++  color: var(--db-color-text-primary);
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
+diff --git a/src/app/features/dashboard/components/assigned-issues-table/assigned-issues-table.component.ts b/src/app/features/dashboard/components/assigned-issues-table/assigned-issues-table.component.ts
+new file mode 100644
+index 0000000..d6578b1
+--- /dev/null
++++ b/src/app/features/dashboard/components/assigned-issues-table/assigned-issues-table.component.ts
+@@ -0,0 +1,18 @@
++import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
++import { RouterLink } from '@angular/router';
++import { Issue } from '../../../../core/models';
++import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
++import { PriorityBadgeComponent } from '../../../../shared/components/priority-badge/priority-badge.component';
++import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
++
++@Component({
++  selector: 'app-assigned-issues-table',
++  standalone: true,
++  imports: [RouterLink, StatusBadgeComponent, PriorityBadgeComponent, EmptyStateComponent],
++  templateUrl: './assigned-issues-table.component.html',
++  styleUrl: './assigned-issues-table.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class AssignedIssuesTableComponent {
++  @Input({ required: true }) issues: Issue[] = [];
++}
+diff --git a/src/app/features/dashboard/components/completion-trend-chart/completion-trend-chart.component.html b/src/app/features/dashboard/components/completion-trend-chart/completion-trend-chart.component.html
+new file mode 100644
+index 0000000..156ef3e
+--- /dev/null
++++ b/src/app/features/dashboard/components/completion-trend-chart/completion-trend-chart.component.html
+@@ -0,0 +1,27 @@
++<div class="trend-chart">
++  @if (total() === 0) {
++    <p class="trend-chart__empty">No issues completed in the last 7 days.</p>
++  } @else {
++    <svg
++      [attr.viewBox]="'0 0 ' + width + ' ' + height"
++      class="trend-chart__svg"
++      role="img"
++      aria-label="Issue completion trend over the last 7 days"
++    >
++      <polyline
++        [attr.points]="polylinePoints()"
++        fill="none"
++        stroke="var(--db-color-primary)"
++        stroke-width="2"
++      />
++      @for (dot of dots(); track $index) {
++        <circle [attr.cx]="dot.x" [attr.cy]="dot.y" r="2.5" fill="var(--db-color-primary)" />
++      }
++    </svg>
++    <div class="trend-chart__labels">
++      @for (label of dayLabels(); track $index) {
++        <span>{{ label }}</span>
++      }
++    </div>
++  }
++</div>
+diff --git a/src/app/features/dashboard/components/completion-trend-chart/completion-trend-chart.component.scss b/src/app/features/dashboard/components/completion-trend-chart/completion-trend-chart.component.scss
+new file mode 100644
+index 0000000..b72475c
+--- /dev/null
++++ b/src/app/features/dashboard/components/completion-trend-chart/completion-trend-chart.component.scss
+@@ -0,0 +1,26 @@
++.trend-chart {
++  display: flex;
++  flex-direction: column;
++  gap: var(--db-space-xs);
++}
++
++.trend-chart__svg {
++  width: 100%;
++  height: 80px;
++}
++
++.trend-chart__labels {
++  display: flex;
++  justify-content: space-between;
++  padding: 0 8px;
++  font-size: 0.7rem;
++  color: var(--db-color-text-secondary);
++}
++
++.trend-chart__empty {
++  margin: 0;
++  color: var(--db-color-text-secondary);
++  font-size: 0.85rem;
++  padding: var(--db-space-lg) 0;
++  text-align: center;
++}
+diff --git a/src/app/features/dashboard/components/completion-trend-chart/completion-trend-chart.component.ts b/src/app/features/dashboard/components/completion-trend-chart/completion-trend-chart.component.ts
+new file mode 100644
+index 0000000..4a474eb
+--- /dev/null
++++ b/src/app/features/dashboard/components/completion-trend-chart/completion-trend-chart.component.ts
+@@ -0,0 +1,73 @@
++import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
++
++export interface CompletionTrendPoint {
++  date: string;
++  completed: number;
++}
++
++const CHART_WIDTH = 280;
++const CHART_HEIGHT = 80;
++const PADDING = 8;
++
++@Component({
++  selector: 'app-completion-trend-chart',
++  standalone: true,
++  templateUrl: './completion-trend-chart.component.html',
++  styleUrl: './completion-trend-chart.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class CompletionTrendChartComponent {
++  private readonly pointsSignal = signal<CompletionTrendPoint[]>([]);
++
++  @Input({ required: true })
++  set points(value: CompletionTrendPoint[]) {
++    this.pointsSignal.set(value);
++  }
++
++  readonly width = CHART_WIDTH;
++  readonly height = CHART_HEIGHT;
++
++  readonly total = computed(() => this.pointsSignal().reduce((sum, p) => sum + p.completed, 0));
++
++  readonly dayLabels = computed(() =>
++    this.pointsSignal().map((p) =>
++      new Date(p.date).toLocaleDateString(undefined, { weekday: 'narrow' }),
++    ),
++  );
++
++  readonly polylinePoints = computed(() => {
++    const points = this.pointsSignal();
++    if (points.length === 0) {
++      return '';
++    }
++    const max = Math.max(1, ...points.map((p) => p.completed));
++    const innerWidth = CHART_WIDTH - PADDING * 2;
++    const innerHeight = CHART_HEIGHT - PADDING * 2;
++    const step = points.length > 1 ? innerWidth / (points.length - 1) : 0;
++
++    return points
++      .map((point, index) => {
++        const x = PADDING + step * index;
++        const y = PADDING + innerHeight - (point.completed / max) * innerHeight;
++        return `${x.toFixed(1)},${y.toFixed(1)}`;
++      })
++      .join(' ');
++  });
++
++  readonly dots = computed(() => {
++    const points = this.pointsSignal();
++    if (points.length === 0) {
++      return [];
++    }
++    const max = Math.max(1, ...points.map((p) => p.completed));
++    const innerWidth = CHART_WIDTH - PADDING * 2;
++    const innerHeight = CHART_HEIGHT - PADDING * 2;
++    const step = points.length > 1 ? innerWidth / (points.length - 1) : 0;
++
++    return points.map((point, index) => ({
++      x: PADDING + step * index,
++      y: PADDING + innerHeight - (point.completed / max) * innerHeight,
++      completed: point.completed,
++    }));
++  });
++}
+diff --git a/src/app/features/dashboard/components/issue-status-chart/issue-status-chart.component.html b/src/app/features/dashboard/components/issue-status-chart/issue-status-chart.component.html
+new file mode 100644
+index 0000000..0d8987f
+--- /dev/null
++++ b/src/app/features/dashboard/components/issue-status-chart/issue-status-chart.component.html
+@@ -0,0 +1,19 @@
++<div class="chart">
++  @if (total() === 0) {
++    <p class="chart__empty">No issues yet.</p>
++  } @else {
++    @for (bar of bars(); track bar.status) {
++      <div class="chart__row">
++        <span class="chart__label">{{ bar.label }}</span>
++        <div class="chart__track">
++          <div
++            class="chart__fill"
++            [style.width.%]="bar.percent"
++            [style.background]="'var(' + bar.cssVar + ')'"
++          ></div>
++        </div>
++        <span class="chart__count">{{ bar.count }}</span>
++      </div>
++    }
++  }
++</div>
+diff --git a/src/app/features/dashboard/components/issue-status-chart/issue-status-chart.component.scss b/src/app/features/dashboard/components/issue-status-chart/issue-status-chart.component.scss
+new file mode 100644
+index 0000000..6858393
+--- /dev/null
++++ b/src/app/features/dashboard/components/issue-status-chart/issue-status-chart.component.scss
+@@ -0,0 +1,43 @@
++.chart {
++  display: flex;
++  flex-direction: column;
++  gap: var(--db-space-sm);
++}
++
++.chart__row {
++  display: grid;
++  grid-template-columns: 84px 1fr 28px;
++  align-items: center;
++  gap: var(--db-space-sm);
++}
++
++.chart__label {
++  font-size: 0.8rem;
++  color: var(--db-color-text-secondary);
++}
++
++.chart__track {
++  height: 10px;
++  background: var(--db-color-surface-alt);
++  border-radius: 999px;
++  overflow: hidden;
++}
++
++.chart__fill {
++  height: 100%;
++  border-radius: 999px;
++  transition: width 0.3s ease;
++}
++
++.chart__count {
++  font-size: 0.8rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++  text-align: right;
++}
++
++.chart__empty {
++  margin: 0;
++  color: var(--db-color-text-secondary);
++  font-size: 0.85rem;
++}
+diff --git a/src/app/features/dashboard/components/issue-status-chart/issue-status-chart.component.ts b/src/app/features/dashboard/components/issue-status-chart/issue-status-chart.component.ts
+new file mode 100644
+index 0000000..89e62f8
+--- /dev/null
++++ b/src/app/features/dashboard/components/issue-status-chart/issue-status-chart.component.ts
+@@ -0,0 +1,58 @@
++import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
++import { IssueStatus } from '../../../../core/enums';
++
++interface StatusBarDatum {
++  status: IssueStatus;
++  label: string;
++  count: number;
++  percent: number;
++  cssVar: string;
++}
++
++const STATUS_META: { status: IssueStatus; label: string; cssVar: string }[] = [
++  { status: IssueStatus.Backlog, label: 'Backlog', cssVar: '--db-status-backlog' },
++  { status: IssueStatus.Todo, label: 'Todo', cssVar: '--db-status-todo' },
++  { status: IssueStatus.InProgress, label: 'In Progress', cssVar: '--db-status-in-progress' },
++  { status: IssueStatus.InReview, label: 'In Review', cssVar: '--db-status-in-review' },
++  { status: IssueStatus.Done, label: 'Done', cssVar: '--db-status-done' },
++];
++
++/**
++ * Horizontal bar chart of issue counts by status. Plain CSS/flex bars rather
++ * than a chart library — no new dependency for a shape this simple, and the
++ * data comes in fully computed via `counts` (spec: chart data comes from
++ * services, not embedded in the chart component itself).
++ */
++@Component({
++  selector: 'app-issue-status-chart',
++  standalone: true,
++  templateUrl: './issue-status-chart.component.html',
++  styleUrl: './issue-status-chart.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class IssueStatusChartComponent {
++  private readonly countsSignal = signal<Record<IssueStatus, number>>(
++    Object.fromEntries(STATUS_META.map((s) => [s.status, 0])) as Record<IssueStatus, number>,
++  );
++
++  @Input({ required: true })
++  set counts(value: Record<IssueStatus, number>) {
++    this.countsSignal.set(value);
++  }
++
++  readonly bars = computed<StatusBarDatum[]>(() => {
++    const counts = this.countsSignal();
++    const max = Math.max(1, ...STATUS_META.map((s) => counts[s.status] ?? 0));
++    return STATUS_META.map((meta) => ({
++      status: meta.status,
++      label: meta.label,
++      count: counts[meta.status] ?? 0,
++      percent: ((counts[meta.status] ?? 0) / max) * 100,
++      cssVar: meta.cssVar,
++    }));
++  });
++
++  readonly total = computed(() =>
++    Object.values(this.countsSignal()).reduce((sum, n) => sum + n, 0),
++  );
++}
+diff --git a/src/app/features/dashboard/components/priority-distribution-chart/priority-distribution-chart.component.html b/src/app/features/dashboard/components/priority-distribution-chart/priority-distribution-chart.component.html
+new file mode 100644
+index 0000000..f850dfc
+--- /dev/null
++++ b/src/app/features/dashboard/components/priority-distribution-chart/priority-distribution-chart.component.html
+@@ -0,0 +1,19 @@
++<div class="chart">
++  @if (total() === 0) {
++    <p class="chart__empty">No issues yet.</p>
++  } @else {
++    @for (bar of bars(); track bar.priority) {
++      <div class="chart__row">
++        <span class="chart__label">{{ bar.label }}</span>
++        <div class="chart__track">
++          <div
++            class="chart__fill"
++            [style.width.%]="bar.percent"
++            [style.background]="'var(' + bar.cssVar + ')'"
++          ></div>
++        </div>
++        <span class="chart__count">{{ bar.count }}</span>
++      </div>
++    }
++  }
++</div>
+diff --git a/src/app/features/dashboard/components/priority-distribution-chart/priority-distribution-chart.component.scss b/src/app/features/dashboard/components/priority-distribution-chart/priority-distribution-chart.component.scss
+new file mode 100644
+index 0000000..6858393
+--- /dev/null
++++ b/src/app/features/dashboard/components/priority-distribution-chart/priority-distribution-chart.component.scss
+@@ -0,0 +1,43 @@
++.chart {
++  display: flex;
++  flex-direction: column;
++  gap: var(--db-space-sm);
++}
++
++.chart__row {
++  display: grid;
++  grid-template-columns: 84px 1fr 28px;
++  align-items: center;
++  gap: var(--db-space-sm);
++}
++
++.chart__label {
++  font-size: 0.8rem;
++  color: var(--db-color-text-secondary);
++}
++
++.chart__track {
++  height: 10px;
++  background: var(--db-color-surface-alt);
++  border-radius: 999px;
++  overflow: hidden;
++}
++
++.chart__fill {
++  height: 100%;
++  border-radius: 999px;
++  transition: width 0.3s ease;
++}
++
++.chart__count {
++  font-size: 0.8rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++  text-align: right;
++}
++
++.chart__empty {
++  margin: 0;
++  color: var(--db-color-text-secondary);
++  font-size: 0.85rem;
++}
+diff --git a/src/app/features/dashboard/components/priority-distribution-chart/priority-distribution-chart.component.ts b/src/app/features/dashboard/components/priority-distribution-chart/priority-distribution-chart.component.ts
+new file mode 100644
+index 0000000..1913c56
+--- /dev/null
++++ b/src/app/features/dashboard/components/priority-distribution-chart/priority-distribution-chart.component.ts
+@@ -0,0 +1,51 @@
++import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
++import { IssuePriority } from '../../../../core/enums';
++
++interface PriorityBarDatum {
++  priority: IssuePriority;
++  label: string;
++  count: number;
++  percent: number;
++  cssVar: string;
++}
++
++const PRIORITY_META: { priority: IssuePriority; label: string; cssVar: string }[] = [
++  { priority: IssuePriority.Low, label: 'Low', cssVar: '--db-priority-low' },
++  { priority: IssuePriority.Medium, label: 'Medium', cssVar: '--db-priority-medium' },
++  { priority: IssuePriority.High, label: 'High', cssVar: '--db-priority-high' },
++  { priority: IssuePriority.Critical, label: 'Critical', cssVar: '--db-priority-critical' },
++];
++
++@Component({
++  selector: 'app-priority-distribution-chart',
++  standalone: true,
++  templateUrl: './priority-distribution-chart.component.html',
++  styleUrl: './priority-distribution-chart.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class PriorityDistributionChartComponent {
++  private readonly countsSignal = signal<Record<IssuePriority, number>>(
++    Object.fromEntries(PRIORITY_META.map((p) => [p.priority, 0])) as Record<IssuePriority, number>,
++  );
++
++  @Input({ required: true })
++  set counts(value: Record<IssuePriority, number>) {
++    this.countsSignal.set(value);
++  }
++
++  readonly bars = computed<PriorityBarDatum[]>(() => {
++    const counts = this.countsSignal();
++    const max = Math.max(1, ...PRIORITY_META.map((p) => counts[p.priority] ?? 0));
++    return PRIORITY_META.map((meta) => ({
++      priority: meta.priority,
++      label: meta.label,
++      count: counts[meta.priority] ?? 0,
++      percent: ((counts[meta.priority] ?? 0) / max) * 100,
++      cssVar: meta.cssVar,
++    }));
++  });
++
++  readonly total = computed(() =>
++    Object.values(this.countsSignal()).reduce((sum, n) => sum + n, 0),
++  );
++}
+diff --git a/src/app/features/dashboard/components/project-progress-list/project-progress-list.component.html b/src/app/features/dashboard/components/project-progress-list/project-progress-list.component.html
+new file mode 100644
+index 0000000..5a4f245
+--- /dev/null
++++ b/src/app/features/dashboard/components/project-progress-list/project-progress-list.component.html
+@@ -0,0 +1,17 @@
++@if (projects.length === 0) {
++  <app-empty-state icon="folder_open" message="No projects yet." />
++} @else {
++  <div class="progress-list">
++    @for (project of projects; track project.projectId) {
++      <div class="progress-list__row">
++        <div class="progress-list__header">
++          <span class="progress-list__name">{{ project.projectName }}</span>
++          <span class="progress-list__percent">{{ project.progress }}%</span>
++        </div>
++        <div class="progress-list__track">
++          <div class="progress-list__fill" [style.width.%]="project.progress"></div>
++        </div>
++      </div>
++    }
++  </div>
++}
+diff --git a/src/app/features/dashboard/components/project-progress-list/project-progress-list.component.scss b/src/app/features/dashboard/components/project-progress-list/project-progress-list.component.scss
+new file mode 100644
+index 0000000..f703207
+--- /dev/null
++++ b/src/app/features/dashboard/components/project-progress-list/project-progress-list.component.scss
+@@ -0,0 +1,35 @@
++.progress-list {
++  display: flex;
++  flex-direction: column;
++  gap: var(--db-space-md);
++}
++
++.progress-list__header {
++  display: flex;
++  justify-content: space-between;
++  margin-bottom: 4px;
++  font-size: 0.85rem;
++}
++
++.progress-list__name {
++  color: var(--db-color-text-primary);
++  font-weight: 500;
++}
++
++.progress-list__percent {
++  color: var(--db-color-text-secondary);
++}
++
++.progress-list__track {
++  height: 8px;
++  background: var(--db-color-surface-alt);
++  border-radius: 999px;
++  overflow: hidden;
++}
++
++.progress-list__fill {
++  height: 100%;
++  background: var(--db-color-primary);
++  border-radius: 999px;
++  transition: width 0.3s ease;
++}
+diff --git a/src/app/features/dashboard/components/project-progress-list/project-progress-list.component.ts b/src/app/features/dashboard/components/project-progress-list/project-progress-list.component.ts
+new file mode 100644
+index 0000000..62178d1
+--- /dev/null
++++ b/src/app/features/dashboard/components/project-progress-list/project-progress-list.component.ts
+@@ -0,0 +1,20 @@
++import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
++import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
++
++export interface ProjectProgressDatum {
++  projectId: string;
++  projectName: string;
++  progress: number;
++}
++
++@Component({
++  selector: 'app-project-progress-list',
++  standalone: true,
++  imports: [EmptyStateComponent],
++  templateUrl: './project-progress-list.component.html',
++  styleUrl: './project-progress-list.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class ProjectProgressListComponent {
++  @Input({ required: true }) projects: ProjectProgressDatum[] = [];
++}
+diff --git a/src/app/features/dashboard/dashboard.component.html b/src/app/features/dashboard/dashboard.component.html
+new file mode 100644
+index 0000000..07738fa
+--- /dev/null
++++ b/src/app/features/dashboard/dashboard.component.html
+@@ -0,0 +1,73 @@
++<div class="dashboard">
++  <h1 class="dashboard__title">Dashboard</h1>
++
++  @if (loading()) {
++    <app-loading-spinner message="Loading dashboard..." />
++  } @else if (error()) {
++    <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
++  } @else {
++    @if (statistics(); as stats) {
++      <div class="dashboard__stats">
++        <app-stat-card
++          label="Total Issues"
++          [value]="stats.totalIssues"
++          icon="format_list_bulleted"
++        />
++        <app-stat-card
++          label="Completed"
++          [value]="stats.completedIssues"
++          icon="check_circle"
++          tone="success"
++        />
++        <app-stat-card
++          label="In Progress"
++          [value]="stats.inProgressIssues"
++          icon="autorenew"
++          tone="warning"
++        />
++        <app-stat-card
++          label="High Priority"
++          [value]="stats.highPriorityIssues"
++          icon="priority_high"
++          tone="danger"
++        />
++      </div>
++
++      <div class="dashboard__grid">
++        <section class="dashboard__card">
++          <h2 class="dashboard__card-title">Issues by Status</h2>
++          <app-issue-status-chart [counts]="stats.issuesByStatus" />
++        </section>
++
++        <section class="dashboard__card">
++          <h2 class="dashboard__card-title">Priority Distribution</h2>
++          <app-priority-distribution-chart [counts]="stats.issuesByPriority" />
++        </section>
++
++        <section class="dashboard__card">
++          <h2 class="dashboard__card-title">Issue Completion Trend</h2>
++          <app-completion-trend-chart [points]="stats.completionTrend" />
++        </section>
++
++        <section class="dashboard__card">
++          <h2 class="dashboard__card-title">Project Progress</h2>
++          <app-project-progress-list [projects]="stats.projectProgress" />
++        </section>
++
++        <section class="dashboard__card dashboard__card--wide">
++          <h2 class="dashboard__card-title">My Assigned Issues</h2>
++          <app-assigned-issues-table [issues]="assignedIssues()" />
++        </section>
++
++        <section class="dashboard__card dashboard__card--wide">
++          <h2 class="dashboard__card-title">Recent Activity</h2>
++          @if (recentActivity().length === 0) {
++            <app-empty-state icon="history" message="No recent activity." />
++          } @else {
++            <app-activity-timeline [activities]="recentActivity()" />
++          }
++        </section>
++      </div>
++    }
++  }
++</div>
+diff --git a/src/app/features/dashboard/dashboard.component.scss b/src/app/features/dashboard/dashboard.component.scss
+new file mode 100644
+index 0000000..cf1b2ce
+--- /dev/null
++++ b/src/app/features/dashboard/dashboard.component.scss
+@@ -0,0 +1,46 @@
++.dashboard__title {
++  margin: 0 0 var(--db-space-lg);
++  font-size: 1.5rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.dashboard__stats {
++  display: grid;
++  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
++  gap: var(--db-space-md);
++  margin-bottom: var(--db-space-lg);
++}
++
++.dashboard__grid {
++  display: grid;
++  grid-template-columns: repeat(2, 1fr);
++  gap: var(--db-space-md);
++
++  @media (max-width: 900px) {
++    grid-template-columns: 1fr;
++  }
++}
++
++.dashboard__card {
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  padding: var(--db-space-lg);
++  box-shadow: var(--db-shadow-sm);
++}
++
++.dashboard__card--wide {
++  grid-column: span 2;
++
++  @media (max-width: 900px) {
++    grid-column: span 1;
++  }
++}
++
++.dashboard__card-title {
++  margin: 0 0 var(--db-space-md);
++  font-size: 1rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
+diff --git a/src/app/features/dashboard/dashboard.component.spec.ts b/src/app/features/dashboard/dashboard.component.spec.ts
+new file mode 100644
+index 0000000..f8f1cd6
+--- /dev/null
++++ b/src/app/features/dashboard/dashboard.component.spec.ts
+@@ -0,0 +1,131 @@
++import { TestBed } from '@angular/core/testing';
++import { of, throwError } from 'rxjs';
++import { DashboardComponent } from './dashboard.component';
++import { DashboardService } from '../../core/services/dashboard.service';
++import { AuthService } from '../../core/services/auth.service';
++import { IssuePriority, IssueStatus } from '../../core/enums';
++import { DashboardStatistics } from '../../core/models';
++
++const STUB_STATS: DashboardStatistics = {
++  totalIssues: 5,
++  completedIssues: 2,
++  inProgressIssues: 1,
++  highPriorityIssues: 1,
++  issuesByStatus: {
++    [IssueStatus.Backlog]: 1,
++    [IssueStatus.Todo]: 1,
++    [IssueStatus.InProgress]: 1,
++    [IssueStatus.InReview]: 0,
++    [IssueStatus.Done]: 2,
++  },
++  issuesByPriority: {
++    [IssuePriority.Low]: 2,
++    [IssuePriority.Medium]: 2,
++    [IssuePriority.High]: 1,
++    [IssuePriority.Critical]: 0,
++  },
++  projectProgress: [{ projectId: 'p1', projectName: 'Test Project', progress: 50 }],
++  completionTrend: [],
++};
++
++describe('DashboardComponent', () => {
++  it('starts in a loading state and shows statistics once loaded', () => {
++    const dashboardServiceStub = {
++      getStatistics: () => of(STUB_STATS),
++      getAssignedIssues: () => of([]),
++      getRecentActivity: () => of([]),
++    };
++    const authServiceStub = { currentUser: () => ({ id: 'user-1' }) };
++
++    TestBed.configureTestingModule({
++      imports: [DashboardComponent],
++      providers: [
++        { provide: DashboardService, useValue: dashboardServiceStub },
++        { provide: AuthService, useValue: authServiceStub },
++      ],
++    });
++
++    const fixture = TestBed.createComponent(DashboardComponent);
++    const component = fixture.componentInstance;
++
++    // Statistics resolve synchronously via `of(...)`, so by the time the
++    // constructor's load() call returns, loading is already false.
++    expect(component.loading()).toBe(false);
++    expect(component.statistics()).toEqual(STUB_STATS);
++    expect(component.error()).toBeNull();
++  });
++
++  it('shows an error state when statistics fail to load', () => {
++    const dashboardServiceStub = {
++      getStatistics: () => throwError(() => new Error('network down')),
++      getAssignedIssues: () => of([]),
++      getRecentActivity: () => of([]),
++    };
++    const authServiceStub = { currentUser: () => ({ id: 'user-1' }) };
++
++    TestBed.configureTestingModule({
++      imports: [DashboardComponent],
++      providers: [
++        { provide: DashboardService, useValue: dashboardServiceStub },
++        { provide: AuthService, useValue: authServiceStub },
++      ],
++    });
++
++    const fixture = TestBed.createComponent(DashboardComponent);
++    const component = fixture.componentInstance;
++
++    expect(component.loading()).toBe(false);
++    expect(component.error()).toContain("couldn't load");
++    expect(component.statistics()).toBeNull();
++  });
++
++  it('retry() re-fetches statistics and clears the error', () => {
++    let callCount = 0;
++    const dashboardServiceStub = {
++      getStatistics: () => {
++        callCount++;
++        return callCount === 1 ? throwError(() => new Error('fail')) : of(STUB_STATS);
++      },
++      getAssignedIssues: () => of([]),
++      getRecentActivity: () => of([]),
++    };
++    const authServiceStub = { currentUser: () => ({ id: 'user-1' }) };
++
++    TestBed.configureTestingModule({
++      imports: [DashboardComponent],
++      providers: [
++        { provide: DashboardService, useValue: dashboardServiceStub },
++        { provide: AuthService, useValue: authServiceStub },
++      ],
++    });
++
++    const fixture = TestBed.createComponent(DashboardComponent);
++    const component = fixture.componentInstance;
++    expect(component.error()).toBeTruthy();
++
++    component.retry();
++
++    expect(component.error()).toBeNull();
++    expect(component.statistics()).toEqual(STUB_STATS);
++  });
++
++  it('does not request assigned issues when there is no current user', () => {
++    const dashboardServiceStub = {
++      getStatistics: () => of(STUB_STATS),
++      getAssignedIssues: jasmine.createSpy('getAssignedIssues').and.returnValue(of([])),
++      getRecentActivity: () => of([]),
++    };
++    const authServiceStub = { currentUser: () => null };
++
++    TestBed.configureTestingModule({
++      imports: [DashboardComponent],
++      providers: [
++        { provide: DashboardService, useValue: dashboardServiceStub },
++        { provide: AuthService, useValue: authServiceStub },
++      ],
++    });
++
++    TestBed.createComponent(DashboardComponent);
++    expect(dashboardServiceStub.getAssignedIssues).not.toHaveBeenCalled();
++  });
++});
+diff --git a/src/app/features/dashboard/dashboard.component.ts b/src/app/features/dashboard/dashboard.component.ts
+index ec0753d..7330819 100644
+--- a/src/app/features/dashboard/dashboard.component.ts
++++ b/src/app/features/dashboard/dashboard.component.ts
+@@ -1,9 +1,81 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
++import { DashboardService } from '../../core/services/dashboard.service';
++import { AuthService } from '../../core/services/auth.service';
++import { Activity, DashboardStatistics, Issue } from '../../core/models';
++import { StatCardComponent } from '../../shared/components/stat-card/stat-card.component';
++import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner.component';
++import { ErrorStateComponent } from '../../shared/components/error-state/error-state.component';
++import { ActivityTimelineComponent } from '../../shared/components/activity-timeline/activity-timeline.component';
++import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
++import { IssueStatusChartComponent } from './components/issue-status-chart/issue-status-chart.component';
++import { PriorityDistributionChartComponent } from './components/priority-distribution-chart/priority-distribution-chart.component';
++import { CompletionTrendChartComponent } from './components/completion-trend-chart/completion-trend-chart.component';
++import { ProjectProgressListComponent } from './components/project-progress-list/project-progress-list.component';
++import { AssignedIssuesTableComponent } from './components/assigned-issues-table/assigned-issues-table.component';
+ 
+ @Component({
+   selector: 'app-dashboard',
+   standalone: true,
+-  template: `<p>Dashboard — statistics, charts and activity land here in Phase 4.</p>`,
++  imports: [
++    StatCardComponent,
++    LoadingSpinnerComponent,
++    ErrorStateComponent,
++    ActivityTimelineComponent,
++    EmptyStateComponent,
++    IssueStatusChartComponent,
++    PriorityDistributionChartComponent,
++    CompletionTrendChartComponent,
++    ProjectProgressListComponent,
++    AssignedIssuesTableComponent,
++  ],
++  templateUrl: './dashboard.component.html',
++  styleUrl: './dashboard.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class DashboardComponent {}
++export class DashboardComponent {
++  private readonly dashboardService = inject(DashboardService);
++  private readonly authService = inject(AuthService);
++
++  readonly loading = signal(true);
++  readonly error = signal<string | null>(null);
++
++  readonly statistics = signal<DashboardStatistics | null>(null);
++  readonly assignedIssues = signal<Issue[]>([]);
++  readonly recentActivity = signal<Activity[]>([]);
++
++  constructor() {
++    this.load();
++  }
++
++  retry(): void {
++    this.load();
++  }
++
++  private load(): void {
++    this.loading.set(true);
++    this.error.set(null);
++
++    const userId = this.authService.currentUser()?.id;
++
++    this.dashboardService.getStatistics().subscribe({
++      next: (stats) => {
++        this.statistics.set(stats);
++        this.loading.set(false);
++      },
++      error: () => {
++        this.error.set("We couldn't load your dashboard statistics.");
++        this.loading.set(false);
++      },
++    });
++
++    if (userId) {
++      this.dashboardService.getAssignedIssues(userId).subscribe((issues) => {
++        this.assignedIssues.set(issues);
++      });
++    }
++
++    this.dashboardService.getRecentActivity().subscribe((activity) => {
++      this.recentActivity.set(activity);
++    });
++  }
++}
+diff --git a/src/app/shared/components/activity-timeline/activity-timeline.component.html b/src/app/shared/components/activity-timeline/activity-timeline.component.html
+new file mode 100644
+index 0000000..30443ad
+--- /dev/null
++++ b/src/app/shared/components/activity-timeline/activity-timeline.component.html
+@@ -0,0 +1,18 @@
++<ul class="activity-timeline">
++  @for (activity of activities; track activity.id) {
++    <li class="activity-timeline__item">
++      <div class="activity-timeline__dot"></div>
++      <div class="activity-timeline__content">
++        <p class="activity-timeline__line">
++          <span class="activity-timeline__user">{{ activity.userName }}</span>
++          {{ activity.action }}
++          <span class="activity-timeline__entity">{{ activity.entityLabel }}</span>
++          @if (activity.detail) {
++            <span class="activity-timeline__detail">{{ activity.detail }}</span>
++          }
++        </p>
++        <time class="activity-timeline__time">{{ activity.createdDate | relativeTime }}</time>
++      </div>
++    </li>
++  }
++</ul>
+diff --git a/src/app/shared/components/activity-timeline/activity-timeline.component.scss b/src/app/shared/components/activity-timeline/activity-timeline.component.scss
+new file mode 100644
+index 0000000..a1f623c
+--- /dev/null
++++ b/src/app/shared/components/activity-timeline/activity-timeline.component.scss
+@@ -0,0 +1,57 @@
++.activity-timeline {
++  list-style: none;
++  margin: 0;
++  padding: 0;
++}
++
++.activity-timeline__item {
++  display: flex;
++  gap: var(--db-space-sm);
++  padding: var(--db-space-sm) 0;
++  border-bottom: 1px solid var(--db-color-border);
++
++  &:last-child {
++    border-bottom: none;
++  }
++}
++
++.activity-timeline__dot {
++  width: 8px;
++  height: 8px;
++  border-radius: 50%;
++  background: var(--db-color-primary);
++  margin-top: 6px;
++  flex-shrink: 0;
++}
++
++.activity-timeline__content {
++  display: flex;
++  flex-direction: column;
++  gap: 2px;
++}
++
++.activity-timeline__line {
++  margin: 0;
++  font-size: 0.85rem;
++  color: var(--db-color-text-primary);
++  line-height: 1.4;
++}
++
++.activity-timeline__user {
++  font-weight: 600;
++}
++
++.activity-timeline__entity {
++  font-weight: 500;
++  color: var(--db-color-primary);
++}
++
++.activity-timeline__detail {
++  color: var(--db-color-text-secondary);
++  margin-left: 4px;
++}
++
++.activity-timeline__time {
++  font-size: 0.75rem;
++  color: var(--db-color-text-secondary);
++}
+diff --git a/src/app/shared/components/activity-timeline/activity-timeline.component.ts b/src/app/shared/components/activity-timeline/activity-timeline.component.ts
+new file mode 100644
+index 0000000..a1c71c4
+--- /dev/null
++++ b/src/app/shared/components/activity-timeline/activity-timeline.component.ts
+@@ -0,0 +1,15 @@
++import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
++import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
++import { Activity } from '../../../core/models';
++
++@Component({
++  selector: 'app-activity-timeline',
++  standalone: true,
++  imports: [RelativeTimePipe],
++  templateUrl: './activity-timeline.component.html',
++  styleUrl: './activity-timeline.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class ActivityTimelineComponent {
++  @Input({ required: true }) activities: Activity[] = [];
++}
+diff --git a/src/app/shared/components/empty-state/empty-state.component.html b/src/app/shared/components/empty-state/empty-state.component.html
+new file mode 100644
+index 0000000..0e2a813
+--- /dev/null
++++ b/src/app/shared/components/empty-state/empty-state.component.html
+@@ -0,0 +1,12 @@
++<div class="empty-state">
++  <mat-icon class="empty-state__icon">{{ icon }}</mat-icon>
++  <p class="empty-state__message">{{ message }}</p>
++  @if (hint) {
++    <p class="empty-state__hint">{{ hint }}</p>
++  }
++  @if (actionLabel) {
++    <button mat-stroked-button color="primary" type="button" (click)="action.emit()">
++      {{ actionLabel }}
++    </button>
++  }
++</div>
+diff --git a/src/app/shared/components/empty-state/empty-state.component.scss b/src/app/shared/components/empty-state/empty-state.component.scss
+new file mode 100644
+index 0000000..fa72db7
+--- /dev/null
++++ b/src/app/shared/components/empty-state/empty-state.component.scss
+@@ -0,0 +1,29 @@
++.empty-state {
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  justify-content: center;
++  gap: var(--db-space-xs);
++  padding: var(--db-space-2xl) var(--db-space-lg);
++  text-align: center;
++  color: var(--db-color-text-secondary);
++}
++
++.empty-state__icon {
++  font-size: 36px;
++  width: 36px;
++  height: 36px;
++  color: var(--db-color-text-disabled);
++  margin-bottom: var(--db-space-sm);
++}
++
++.empty-state__message {
++  margin: 0;
++  font-weight: 500;
++  color: var(--db-color-text-primary);
++}
++
++.empty-state__hint {
++  margin: 0 0 var(--db-space-sm);
++  font-size: 0.85rem;
++}
+diff --git a/src/app/shared/components/empty-state/empty-state.component.ts b/src/app/shared/components/empty-state/empty-state.component.ts
+new file mode 100644
+index 0000000..55e4241
+--- /dev/null
++++ b/src/app/shared/components/empty-state/empty-state.component.ts
+@@ -0,0 +1,20 @@
++import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
++import { MatIconModule } from '@angular/material/icon';
++import { MatButtonModule } from '@angular/material/button';
++
++@Component({
++  selector: 'app-empty-state',
++  standalone: true,
++  imports: [MatIconModule, MatButtonModule],
++  templateUrl: './empty-state.component.html',
++  styleUrl: './empty-state.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class EmptyStateComponent {
++  @Input() icon = 'inbox';
++  @Input({ required: true }) message = '';
++  @Input() hint = '';
++  /** Omit to hide the action button entirely. */
++  @Input() actionLabel = '';
++  @Output() action = new EventEmitter<void>();
++}
+diff --git a/src/app/shared/components/error-state/error-state.component.html b/src/app/shared/components/error-state/error-state.component.html
+new file mode 100644
+index 0000000..a664c1c
+--- /dev/null
++++ b/src/app/shared/components/error-state/error-state.component.html
+@@ -0,0 +1,8 @@
++<div class="error-state" role="alert">
++  <mat-icon class="error-state__icon">error_outline</mat-icon>
++  <p class="error-state__title">{{ title }}</p>
++  <p class="error-state__message">{{ message }}</p>
++  <button mat-flat-button color="primary" type="button" (click)="retry.emit()">
++    {{ retryLabel }}
++  </button>
++</div>
+diff --git a/src/app/shared/components/error-state/error-state.component.scss b/src/app/shared/components/error-state/error-state.component.scss
+new file mode 100644
+index 0000000..6f89c3d
+--- /dev/null
++++ b/src/app/shared/components/error-state/error-state.component.scss
+@@ -0,0 +1,29 @@
++.error-state {
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  justify-content: center;
++  gap: var(--db-space-xs);
++  padding: var(--db-space-2xl) var(--db-space-lg);
++  text-align: center;
++}
++
++.error-state__icon {
++  font-size: 36px;
++  width: 36px;
++  height: 36px;
++  color: var(--db-color-danger);
++  margin-bottom: var(--db-space-sm);
++}
++
++.error-state__title {
++  margin: 0;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.error-state__message {
++  margin: 0 0 var(--db-space-md);
++  font-size: 0.85rem;
++  color: var(--db-color-text-secondary);
++}
+diff --git a/src/app/shared/components/error-state/error-state.component.ts b/src/app/shared/components/error-state/error-state.component.ts
+new file mode 100644
+index 0000000..52a14db
+--- /dev/null
++++ b/src/app/shared/components/error-state/error-state.component.ts
+@@ -0,0 +1,18 @@
++import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
++import { MatIconModule } from '@angular/material/icon';
++import { MatButtonModule } from '@angular/material/button';
++
++@Component({
++  selector: 'app-error-state',
++  standalone: true,
++  imports: [MatIconModule, MatButtonModule],
++  templateUrl: './error-state.component.html',
++  styleUrl: './error-state.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class ErrorStateComponent {
++  @Input() title = 'Something went wrong.';
++  @Input({ required: true }) message = '';
++  @Input() retryLabel = 'Try again';
++  @Output() retry = new EventEmitter<void>();
++}
+diff --git a/src/app/shared/components/loading-spinner/loading-spinner.component.html b/src/app/shared/components/loading-spinner/loading-spinner.component.html
+new file mode 100644
+index 0000000..bd1072d
+--- /dev/null
++++ b/src/app/shared/components/loading-spinner/loading-spinner.component.html
+@@ -0,0 +1,4 @@
++<div class="loading-spinner" role="status" [attr.aria-label]="message">
++  <mat-progress-spinner mode="indeterminate" [diameter]="diameter" />
++  <span class="loading-spinner__message">{{ message }}</span>
++</div>
+diff --git a/src/app/shared/components/loading-spinner/loading-spinner.component.scss b/src/app/shared/components/loading-spinner/loading-spinner.component.scss
+new file mode 100644
+index 0000000..4f787ff
+--- /dev/null
++++ b/src/app/shared/components/loading-spinner/loading-spinner.component.scss
+@@ -0,0 +1,10 @@
++.loading-spinner {
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  justify-content: center;
++  gap: var(--db-space-md);
++  padding: var(--db-space-2xl) var(--db-space-lg);
++  color: var(--db-color-text-secondary);
++  font-size: 0.9rem;
++}
+diff --git a/src/app/shared/components/loading-spinner/loading-spinner.component.ts b/src/app/shared/components/loading-spinner/loading-spinner.component.ts
+new file mode 100644
+index 0000000..9f271e3
+--- /dev/null
++++ b/src/app/shared/components/loading-spinner/loading-spinner.component.ts
+@@ -0,0 +1,15 @@
++import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
++import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
++
++@Component({
++  selector: 'app-loading-spinner',
++  standalone: true,
++  imports: [MatProgressSpinnerModule],
++  templateUrl: './loading-spinner.component.html',
++  styleUrl: './loading-spinner.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class LoadingSpinnerComponent {
++  @Input() message = 'Loading...';
++  @Input() diameter = 36;
++}
+diff --git a/src/app/shared/components/priority-badge/priority-badge.component.html b/src/app/shared/components/priority-badge/priority-badge.component.html
+new file mode 100644
+index 0000000..736bb2a
+--- /dev/null
++++ b/src/app/shared/components/priority-badge/priority-badge.component.html
+@@ -0,0 +1,4 @@
++<span class="priority-badge" [ngClass]="cssClass()">
++  <mat-icon class="priority-badge__icon">{{ icon() }}</mat-icon>
++  {{ label() }}
++</span>
+diff --git a/src/app/shared/components/priority-badge/priority-badge.component.scss b/src/app/shared/components/priority-badge/priority-badge.component.scss
+new file mode 100644
+index 0000000..10109c3
+--- /dev/null
++++ b/src/app/shared/components/priority-badge/priority-badge.component.scss
+@@ -0,0 +1,30 @@
++.priority-badge {
++  display: inline-flex;
++  align-items: center;
++  gap: 2px;
++  padding: 2px 8px 2px 4px;
++  border-radius: 999px;
++  font-size: 0.75rem;
++  font-weight: 500;
++  white-space: nowrap;
++  color: #fff;
++}
++
++.priority-badge__icon {
++  font-size: 16px;
++  width: 16px;
++  height: 16px;
++}
++
++.priority-badge--low {
++  background: var(--db-priority-low);
++}
++.priority-badge--medium {
++  background: var(--db-priority-medium);
++}
++.priority-badge--high {
++  background: var(--db-priority-high);
++}
++.priority-badge--critical {
++  background: var(--db-priority-critical);
++}
+diff --git a/src/app/shared/components/priority-badge/priority-badge.component.ts b/src/app/shared/components/priority-badge/priority-badge.component.ts
+new file mode 100644
+index 0000000..dc7acc9
+--- /dev/null
++++ b/src/app/shared/components/priority-badge/priority-badge.component.ts
+@@ -0,0 +1,43 @@
++import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
++import { NgClass } from '@angular/common';
++import { MatIconModule } from '@angular/material/icon';
++import { IssuePriority } from '../../../core/enums';
++
++const PRIORITY_LABELS: Record<IssuePriority, string> = {
++  [IssuePriority.Low]: 'Low',
++  [IssuePriority.Medium]: 'Medium',
++  [IssuePriority.High]: 'High',
++  [IssuePriority.Critical]: 'Critical',
++};
++
++// Icons carry priority meaning too, not just color — so it isn't communicated by color alone.
++const PRIORITY_ICONS: Record<IssuePriority, string> = {
++  [IssuePriority.Low]: 'keyboard_arrow_down',
++  [IssuePriority.Medium]: 'remove',
++  [IssuePriority.High]: 'keyboard_arrow_up',
++  [IssuePriority.Critical]: 'keyboard_double_arrow_up',
++};
++
++@Component({
++  selector: 'app-priority-badge',
++  standalone: true,
++  imports: [NgClass, MatIconModule],
++  templateUrl: './priority-badge.component.html',
++  styleUrl: './priority-badge.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class PriorityBadgeComponent {
++  private readonly prioritySignal = signal<IssuePriority>(IssuePriority.Low);
++
++  @Input({ required: true })
++  set priority(value: IssuePriority) {
++    this.prioritySignal.set(value);
++  }
++  get priority(): IssuePriority {
++    return this.prioritySignal();
++  }
++
++  readonly label = computed(() => PRIORITY_LABELS[this.prioritySignal()]);
++  readonly icon = computed(() => PRIORITY_ICONS[this.prioritySignal()]);
++  readonly cssClass = computed(() => `priority-badge--${this.prioritySignal().toLowerCase()}`);
++}
+diff --git a/src/app/shared/components/stat-card/stat-card.component.html b/src/app/shared/components/stat-card/stat-card.component.html
+new file mode 100644
+index 0000000..bf3cdb3
+--- /dev/null
++++ b/src/app/shared/components/stat-card/stat-card.component.html
+@@ -0,0 +1,9 @@
++<div class="stat-card" [class]="'stat-card--' + tone">
++  <div class="stat-card__icon">
++    <mat-icon>{{ icon }}</mat-icon>
++  </div>
++  <div class="stat-card__body">
++    <span class="stat-card__value">{{ value }}</span>
++    <span class="stat-card__label">{{ label }}</span>
++  </div>
++</div>
+diff --git a/src/app/shared/components/stat-card/stat-card.component.scss b/src/app/shared/components/stat-card/stat-card.component.scss
+new file mode 100644
+index 0000000..44e34ce
+--- /dev/null
++++ b/src/app/shared/components/stat-card/stat-card.component.scss
+@@ -0,0 +1,52 @@
++.stat-card {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-md);
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  padding: var(--db-space-md) var(--db-space-lg);
++  box-shadow: var(--db-shadow-sm);
++}
++
++.stat-card__icon {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  width: 44px;
++  height: 44px;
++  border-radius: var(--db-radius-md);
++  background: color-mix(in srgb, var(--db-color-primary) 12%, transparent);
++  color: var(--db-color-primary);
++  flex-shrink: 0;
++}
++
++.stat-card--success .stat-card__icon {
++  background: color-mix(in srgb, var(--db-color-success) 12%, transparent);
++  color: var(--db-color-success);
++}
++.stat-card--warning .stat-card__icon {
++  background: color-mix(in srgb, var(--db-color-warning) 12%, transparent);
++  color: var(--db-color-warning);
++}
++.stat-card--danger .stat-card__icon {
++  background: color-mix(in srgb, var(--db-color-danger) 12%, transparent);
++  color: var(--db-color-danger);
++}
++
++.stat-card__body {
++  display: flex;
++  flex-direction: column;
++}
++
++.stat-card__value {
++  font-size: 1.5rem;
++  font-weight: 700;
++  color: var(--db-color-text-primary);
++  line-height: 1.2;
++}
++
++.stat-card__label {
++  font-size: 0.8rem;
++  color: var(--db-color-text-secondary);
++}
+diff --git a/src/app/shared/components/stat-card/stat-card.component.ts b/src/app/shared/components/stat-card/stat-card.component.ts
+new file mode 100644
+index 0000000..66e7137
+--- /dev/null
++++ b/src/app/shared/components/stat-card/stat-card.component.ts
+@@ -0,0 +1,18 @@
++import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
++import { MatIconModule } from '@angular/material/icon';
++
++@Component({
++  selector: 'app-stat-card',
++  standalone: true,
++  imports: [MatIconModule],
++  templateUrl: './stat-card.component.html',
++  styleUrl: './stat-card.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class StatCardComponent {
++  @Input({ required: true }) label = '';
++  @Input({ required: true }) value: number | string = 0;
++  @Input() icon = 'analytics';
++  /** Semantic accent — purely visual, doesn't change the value's meaning. */
++  @Input() tone: 'default' | 'success' | 'warning' | 'danger' = 'default';
++}
+diff --git a/src/app/shared/components/status-badge/status-badge.component.html b/src/app/shared/components/status-badge/status-badge.component.html
+new file mode 100644
+index 0000000..a1dacbf
+--- /dev/null
++++ b/src/app/shared/components/status-badge/status-badge.component.html
+@@ -0,0 +1 @@
++<span class="status-badge" [ngClass]="cssClass()">{{ label() }}</span>
+diff --git a/src/app/shared/components/status-badge/status-badge.component.scss b/src/app/shared/components/status-badge/status-badge.component.scss
+new file mode 100644
+index 0000000..9840caf
+--- /dev/null
++++ b/src/app/shared/components/status-badge/status-badge.component.scss
+@@ -0,0 +1,26 @@
++.status-badge {
++  display: inline-flex;
++  align-items: center;
++  padding: 2px 10px;
++  border-radius: 999px;
++  font-size: 0.75rem;
++  font-weight: 500;
++  white-space: nowrap;
++  color: #fff;
++}
++
++.status-badge--backlog {
++  background: var(--db-status-backlog);
++}
++.status-badge--todo {
++  background: var(--db-status-todo);
++}
++.status-badge--in-progress {
++  background: var(--db-status-in-progress);
++}
++.status-badge--in-review {
++  background: var(--db-status-in-review);
++}
++.status-badge--done {
++  background: var(--db-status-done);
++}
+diff --git a/src/app/shared/components/status-badge/status-badge.component.ts b/src/app/shared/components/status-badge/status-badge.component.ts
+new file mode 100644
+index 0000000..98d2c28
+--- /dev/null
++++ b/src/app/shared/components/status-badge/status-badge.component.ts
+@@ -0,0 +1,36 @@
++import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
++import { NgClass } from '@angular/common';
++import { IssueStatus } from '../../../core/enums';
++
++const STATUS_LABELS: Record<IssueStatus, string> = {
++  [IssueStatus.Backlog]: 'Backlog',
++  [IssueStatus.Todo]: 'Todo',
++  [IssueStatus.InProgress]: 'In Progress',
++  [IssueStatus.InReview]: 'In Review',
++  [IssueStatus.Done]: 'Done',
++};
++
++@Component({
++  selector: 'app-status-badge',
++  standalone: true,
++  imports: [NgClass],
++  templateUrl: './status-badge.component.html',
++  styleUrl: './status-badge.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class StatusBadgeComponent {
++  private readonly statusSignal = signal<IssueStatus>(IssueStatus.Backlog);
++
++  @Input({ required: true })
++  set status(value: IssueStatus) {
++    this.statusSignal.set(value);
++  }
++  get status(): IssueStatus {
++    return this.statusSignal();
++  }
++
++  readonly label = computed(() => STATUS_LABELS[this.statusSignal()]);
++  readonly cssClass = computed(
++    () => `status-badge--${this.statusSignal().toLowerCase().replace(/_/g, '-')}`,
++  );
++}
+diff --git a/src/app/shared/pipes/relative-time.pipe.ts b/src/app/shared/pipes/relative-time.pipe.ts
+new file mode 100644
+index 0000000..8ac312c
+--- /dev/null
++++ b/src/app/shared/pipes/relative-time.pipe.ts
+@@ -0,0 +1,43 @@
++import { Pipe, PipeTransform } from '@angular/core';
++
++@Pipe({
++  name: 'relativeTime',
++  standalone: true,
++  pure: false, // recomputes as time passes without needing to reassign the bound value
++})
++export class RelativeTimePipe implements PipeTransform {
++  transform(value: string | Date | null | undefined): string {
++    if (!value) {
++      return '';
++    }
++
++    const date = typeof value === 'string' ? new Date(value) : value;
++    if (Number.isNaN(date.getTime())) {
++      return '';
++    }
++
++    const diffMs = Date.now() - date.getTime();
++    const diffSeconds = Math.round(diffMs / 1000);
++    const diffMinutes = Math.round(diffSeconds / 60);
++    const diffHours = Math.round(diffMinutes / 60);
++    const diffDays = Math.round(diffHours / 24);
++
++    if (diffSeconds < 60) {
++      return 'Just now';
++    }
++    if (diffMinutes < 60) {
++      return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
++    }
++    if (diffHours < 24) {
++      return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
++    }
++    if (diffDays === 1) {
++      return 'Yesterday';
++    }
++    if (diffDays < 7) {
++      return `${diffDays} days ago`;
++    }
++
++    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
++  }
++}

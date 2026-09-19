@@ -1,0 +1,18 @@
+<ul class="activity-timeline">
+  @for (activity of activities; track activity.id) {
+    <li class="activity-timeline__item">
+      <div class="activity-timeline__dot"></div>
+      <div class="activity-timeline__content">
+        <p class="activity-timeline__line">
+          <span class="activity-timeline__user">{{ activity.userName }}</span>
+          {{ activity.action }}
+          <span class="activity-timeline__entity">{{ activity.entityLabel }}</span>
+          @if (activity.detail) {
+            <span class="activity-timeline__detail">{{ activity.detail }}</span>
+          }
+        </p>
+        <time class="activity-timeline__time">{{ activity.createdDate | relativeTime }}</time>
+      </div>
+    </li>
+  }
+</ul>

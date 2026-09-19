@@ -1,0 +1,10 @@
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--db-space-md);
+  padding: var(--db-space-2xl) var(--db-space-lg);
+  color: var(--db-color-text-secondary);
+  font-size: 0.9rem;
+}

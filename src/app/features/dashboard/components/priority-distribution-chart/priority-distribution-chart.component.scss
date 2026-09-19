@@ -1,0 +1,43 @@
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--db-space-sm);
+}
+
+.chart__row {
+  display: grid;
+  grid-template-columns: 84px 1fr 28px;
+  align-items: center;
+  gap: var(--db-space-sm);
+}
+
+.chart__label {
+  font-size: 0.8rem;
+  color: var(--db-color-text-secondary);
+}
+
+.chart__track {
+  height: 10px;
+  background: var(--db-color-surface-alt);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.chart__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.chart__count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+  text-align: right;
+}
+
+.chart__empty {
+  margin: 0;
+  color: var(--db-color-text-secondary);
+  font-size: 0.85rem;
+}

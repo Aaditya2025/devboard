@@ -1,0 +1,19 @@
+<div class="chart">
+  @if (total() === 0) {
+    <p class="chart__empty">No issues yet.</p>
+  } @else {
+    @for (bar of bars(); track bar.status) {
+      <div class="chart__row">
+        <span class="chart__label">{{ bar.label }}</span>
+        <div class="chart__track">
+          <div
+            class="chart__fill"
+            [style.width.%]="bar.percent"
+            [style.background]="'var(' + bar.cssVar + ')'"
+          ></div>
+        </div>
+        <span class="chart__count">{{ bar.count }}</span>
+      </div>
+    }
+  }
+</div>

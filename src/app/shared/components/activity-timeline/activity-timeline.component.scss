@@ -1,0 +1,57 @@
+.activity-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.activity-timeline__item {
+  display: flex;
+  gap: var(--db-space-sm);
+  padding: var(--db-space-sm) 0;
+  border-bottom: 1px solid var(--db-color-border);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.activity-timeline__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--db-color-primary);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.activity-timeline__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activity-timeline__line {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--db-color-text-primary);
+  line-height: 1.4;
+}
+
+.activity-timeline__user {
+  font-weight: 600;
+}
+
+.activity-timeline__entity {
+  font-weight: 500;
+  color: var(--db-color-primary);
+}
+
+.activity-timeline__detail {
+  color: var(--db-color-text-secondary);
+  margin-left: 4px;
+}
+
+.activity-timeline__time {
+  font-size: 0.75rem;
+  color: var(--db-color-text-secondary);
+}

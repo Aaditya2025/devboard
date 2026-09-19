@@ -1,0 +1,29 @@
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--db-space-xs);
+  padding: var(--db-space-2xl) var(--db-space-lg);
+  text-align: center;
+}
+
+.error-state__icon {
+  font-size: 36px;
+  width: 36px;
+  height: 36px;
+  color: var(--db-color-danger);
+  margin-bottom: var(--db-space-sm);
+}
+
+.error-state__title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.error-state__message {
+  margin: 0 0 var(--db-space-md);
+  font-size: 0.85rem;
+  color: var(--db-color-text-secondary);
+}

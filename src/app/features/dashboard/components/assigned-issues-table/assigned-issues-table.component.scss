@@ -1,0 +1,38 @@
+.issues-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.issues-table__row {
+  display: grid;
+  grid-template-columns: 72px 1fr auto auto;
+  align-items: center;
+  gap: var(--db-space-md);
+  padding: var(--db-space-sm) 4px;
+  border-bottom: 1px solid var(--db-color-border);
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--db-radius-sm);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--db-color-surface-alt);
+  }
+}
+
+.issues-table__key {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--db-color-text-secondary);
+}
+
+.issues-table__title {
+  font-size: 0.85rem;
+  color: var(--db-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

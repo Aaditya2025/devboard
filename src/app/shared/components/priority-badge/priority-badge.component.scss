@@ -1,0 +1,30 @@
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px 2px 4px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.priority-badge__icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+}
+
+.priority-badge--low {
+  background: var(--db-priority-low);
+}
+.priority-badge--medium {
+  background: var(--db-priority-medium);
+}
+.priority-badge--high {
+  background: var(--db-priority-high);
+}
+.priority-badge--critical {
+  background: var(--db-priority-critical);
+}

@@ -1,0 +1,14 @@
+@if (issues.length === 0) {
+  <app-empty-state icon="task_alt" message="No issues assigned to you." hint="Nice and clear!" />
+} @else {
+  <div class="issues-table" role="table">
+    @for (issue of issues; track issue.id) {
+      <a class="issues-table__row" role="row" [routerLink]="['/issues', issue.id]">
+        <span class="issues-table__key">{{ issue.key }}</span>
+        <span class="issues-table__title">{{ issue.title }}</span>
+        <app-status-badge [status]="issue.status" />
+        <app-priority-badge [priority]="issue.priority" />
+      </a>
+    }
+  </div>
+}

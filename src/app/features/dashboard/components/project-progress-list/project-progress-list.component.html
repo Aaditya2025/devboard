@@ -1,0 +1,17 @@
+@if (projects.length === 0) {
+  <app-empty-state icon="folder_open" message="No projects yet." />
+} @else {
+  <div class="progress-list">
+    @for (project of projects; track project.projectId) {
+      <div class="progress-list__row">
+        <div class="progress-list__header">
+          <span class="progress-list__name">{{ project.projectName }}</span>
+          <span class="progress-list__percent">{{ project.progress }}%</span>
+        </div>
+        <div class="progress-list__track">
+          <div class="progress-list__fill" [style.width.%]="project.progress"></div>
+        </div>
+      </div>
+    }
+  </div>
+}

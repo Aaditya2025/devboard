@@ -1,0 +1,73 @@
+<div class="dashboard">
+  <h1 class="dashboard__title">Dashboard</h1>
+
+  @if (loading()) {
+    <app-loading-spinner message="Loading dashboard..." />
+  } @else if (error()) {
+    <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
+  } @else {
+    @if (statistics(); as stats) {
+      <div class="dashboard__stats">
+        <app-stat-card
+          label="Total Issues"
+          [value]="stats.totalIssues"
+          icon="format_list_bulleted"
+        />
+        <app-stat-card
+          label="Completed"
+          [value]="stats.completedIssues"
+          icon="check_circle"
+          tone="success"
+        />
+        <app-stat-card
+          label="In Progress"
+          [value]="stats.inProgressIssues"
+          icon="autorenew"
+          tone="warning"
+        />
+        <app-stat-card
+          label="High Priority"
+          [value]="stats.highPriorityIssues"
+          icon="priority_high"
+          tone="danger"
+        />
+      </div>
+
+      <div class="dashboard__grid">
+        <section class="dashboard__card">
+          <h2 class="dashboard__card-title">Issues by Status</h2>
+          <app-issue-status-chart [counts]="stats.issuesByStatus" />
+        </section>
+
+        <section class="dashboard__card">
+          <h2 class="dashboard__card-title">Priority Distribution</h2>
+          <app-priority-distribution-chart [counts]="stats.issuesByPriority" />
+        </section>
+
+        <section class="dashboard__card">
+          <h2 class="dashboard__card-title">Issue Completion Trend</h2>
+          <app-completion-trend-chart [points]="stats.completionTrend" />
+        </section>
+
+        <section class="dashboard__card">
+          <h2 class="dashboard__card-title">Project Progress</h2>
+          <app-project-progress-list [projects]="stats.projectProgress" />
+        </section>
+
+        <section class="dashboard__card dashboard__card--wide">
+          <h2 class="dashboard__card-title">My Assigned Issues</h2>
+          <app-assigned-issues-table [issues]="assignedIssues()" />
+        </section>
+
+        <section class="dashboard__card dashboard__card--wide">
+          <h2 class="dashboard__card-title">Recent Activity</h2>
+          @if (recentActivity().length === 0) {
+            <app-empty-state icon="history" message="No recent activity." />
+          } @else {
+            <app-activity-timeline [activities]="recentActivity()" />
+          }
+        </section>
+      </div>
+    }
+  }
+</div>

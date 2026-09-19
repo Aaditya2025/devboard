@@ -1,0 +1,29 @@
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--db-space-xs);
+  padding: var(--db-space-2xl) var(--db-space-lg);
+  text-align: center;
+  color: var(--db-color-text-secondary);
+}
+
+.empty-state__icon {
+  font-size: 36px;
+  width: 36px;
+  height: 36px;
+  color: var(--db-color-text-disabled);
+  margin-bottom: var(--db-space-sm);
+}
+
+.empty-state__message {
+  margin: 0;
+  font-weight: 500;
+  color: var(--db-color-text-primary);
+}
+
+.empty-state__hint {
+  margin: 0 0 var(--db-space-sm);
+  font-size: 0.85rem;
+}
