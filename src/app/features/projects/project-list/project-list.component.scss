@@ -1,0 +1,113 @@
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--db-space-md);
+}
+
+.project-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--db-color-surface);
+  border: 1px solid var(--db-color-border);
+  border-radius: var(--db-radius-md);
+  padding: var(--db-space-lg);
+  box-shadow: var(--db-shadow-sm);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease;
+
+  &:hover {
+    box-shadow: var(--db-shadow-md);
+  }
+}
+
+.project-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--db-space-sm);
+}
+
+.project-card__key {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--db-color-text-secondary);
+}
+
+.project-card__name {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.project-card__description {
+  margin: 0 0 var(--db-space-md);
+  font-size: 0.85rem;
+  color: var(--db-color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.project-card__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-sm);
+  margin-bottom: var(--db-space-md);
+}
+
+.project-card__progress-track {
+  flex: 1;
+  height: 6px;
+  background: var(--db-color-surface-alt);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.project-card__progress-fill {
+  height: 100%;
+  background: var(--db-color-primary);
+  border-radius: 999px;
+}
+
+.project-card__progress-label {
+  font-size: 0.75rem;
+  color: var(--db-color-text-secondary);
+}
+
+.project-card__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-md);
+  margin-top: auto;
+  padding-top: var(--db-space-sm);
+  border-top: 1px solid var(--db-color-border);
+}
+
+.project-card__stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--db-color-text-secondary);
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.project-card__stat--date {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-card__menu-trigger {
+  margin-left: auto;
+}

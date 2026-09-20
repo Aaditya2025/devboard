@@ -1,0 +1,2231 @@
+diff --git a/README.md b/README.md
+index 646f34d..678894f 100644
+--- a/README.md
++++ b/README.md
+@@ -18,7 +18,7 @@ API later without UI rewrites.
+ - Profile and settings
+ - Responsive layout (desktop, tablet, mobile) with light/dark theming groundwork
+ 
+-> **Status:** Phases 1–4 (Foundation, Layout, Authentication, Dashboard) complete. See
++> **Status:** Phases 1–5 (Foundation, Layout, Authentication, Dashboard, Projects) complete. See
+ > [Project Structure](#project-structure) and [Frontend Development Phases](#frontend-development-phases)
+ > below for what's implemented vs. planned.
+ >
+@@ -99,7 +99,7 @@ src/environments/    # apiBaseUrl, useMockData — swapped per build configurati
+ 2. **Layout** ✅ — main layout, sidebar, navbar, breadcrumbs, responsive drawer
+ 3. **Authentication** ✅ — login, register, auth service/state, guards, interceptor
+ 4. **Dashboard** ✅ — statistics, charts, recent activity, assigned issues, project progress
+-5. **Projects** — list, details, create/edit, members
++5. **Projects** ✅ — list, details, create/edit, members
+ 6. **Issues** — list, create/edit, details, comments, activity, search/filter/sort/pagination
+ 7. **Kanban** — board, columns, drag-and-drop, filtering
+ 8. **Notifications** — center, unread count, mark read/all read
+diff --git a/src/app/core/mock/project-members.mock.ts b/src/app/core/mock/project-members.mock.ts
+new file mode 100644
+index 0000000..76cdf43
+--- /dev/null
++++ b/src/app/core/mock/project-members.mock.ts
+@@ -0,0 +1,59 @@
++import { UserRole } from '../enums';
++import { ProjectMember } from '../models';
++
++export const MOCK_PROJECT_MEMBERS: ProjectMember[] = [
++  {
++    id: 'pm-1',
++    projectId: 'proj-1',
++    userId: 'user-1',
++    name: 'Aditya Sharma',
++    email: 'admin@devboard.dev',
++    role: UserRole.Admin,
++    joinedDate: '2025-11-01',
++  },
++  {
++    id: 'pm-2',
++    projectId: 'proj-1',
++    userId: 'user-2',
++    name: 'Rahul Verma',
++    email: 'dev@devboard.dev',
++    role: UserRole.Developer,
++    joinedDate: '2025-11-05',
++  },
++  {
++    id: 'pm-3',
++    projectId: 'proj-2',
++    userId: 'user-2',
++    name: 'Rahul Verma',
++    email: 'dev@devboard.dev',
++    role: UserRole.Manager,
++    joinedDate: '2025-12-01',
++  },
++  {
++    id: 'pm-4',
++    projectId: 'proj-2',
++    userId: 'user-1',
++    name: 'Aditya Sharma',
++    email: 'admin@devboard.dev',
++    role: UserRole.Developer,
++    joinedDate: '2025-12-03',
++  },
++  {
++    id: 'pm-5',
++    projectId: 'proj-3',
++    userId: 'user-1',
++    name: 'Aditya Sharma',
++    email: 'admin@devboard.dev',
++    role: UserRole.Manager,
++    joinedDate: '2026-01-20',
++  },
++  {
++    id: 'pm-6',
++    projectId: 'proj-4',
++    userId: 'user-3',
++    name: 'Priya Nair',
++    email: 'viewer@devboard.dev',
++    role: UserRole.Viewer,
++    joinedDate: '2025-09-01',
++  },
++];
+diff --git a/src/app/core/services/issue.service.ts b/src/app/core/services/issue.service.ts
+index a7e70d0..ffb7b87 100644
+--- a/src/app/core/services/issue.service.ts
++++ b/src/app/core/services/issue.service.ts
+@@ -5,31 +5,32 @@ import { MOCK_ISSUES } from '../mock/issues.mock';
+ 
+ const MOCK_LATENCY_MS = 400;
+ 
++function delayed<T>(factory: () => T): Observable<T> {
++  return new Observable<T>((subscriber) => {
++    const timeout = setTimeout(() => {
++      subscriber.next(factory());
++      subscriber.complete();
++    }, MOCK_LATENCY_MS);
++    return () => clearTimeout(timeout);
++  });
++}
++
+ /**
+  * Reads/writes issue data. Backed by the mock store for now — swapped for
+  * real HTTP calls in Phase 11. Filtering/sorting/pagination (Phase 6) will
+- * extend this service; kept intentionally minimal here since Phase 4 only
+- * needs read access for dashboard statistics.
++ * extend this service further.
+  */
+ @Injectable({ providedIn: 'root' })
+ export class IssueService {
+   getAll(): Observable<Issue[]> {
+-    return new Observable<Issue[]>((subscriber) => {
+-      const timeout = setTimeout(() => {
+-        subscriber.next([...MOCK_ISSUES]);
+-        subscriber.complete();
+-      }, MOCK_LATENCY_MS);
+-      return () => clearTimeout(timeout);
+-    });
++    return delayed(() => [...MOCK_ISSUES]);
+   }
+ 
+   getAssignedTo(userId: string): Observable<Issue[]> {
+-    return new Observable<Issue[]>((subscriber) => {
+-      const timeout = setTimeout(() => {
+-        subscriber.next(MOCK_ISSUES.filter((issue) => issue.assigneeId === userId));
+-        subscriber.complete();
+-      }, MOCK_LATENCY_MS);
+-      return () => clearTimeout(timeout);
+-    });
++    return delayed(() => MOCK_ISSUES.filter((issue) => issue.assigneeId === userId));
++  }
++
++  getByProjectId(projectId: string): Observable<Issue[]> {
++    return delayed(() => MOCK_ISSUES.filter((issue) => issue.projectId === projectId));
+   }
+ }
+diff --git a/src/app/core/services/project.service.spec.ts b/src/app/core/services/project.service.spec.ts
+new file mode 100644
+index 0000000..7782ca5
+--- /dev/null
++++ b/src/app/core/services/project.service.spec.ts
+@@ -0,0 +1,148 @@
++import { TestBed } from '@angular/core/testing';
++import { ProjectService } from './project.service';
++import { ProjectStatus, UserRole } from '../enums';
++
++describe('ProjectService', () => {
++  let service: ProjectService;
++
++  beforeEach(() => {
++    TestBed.configureTestingModule({});
++    service = TestBed.inject(ProjectService);
++  });
++
++  it('returns all mock projects', (done) => {
++    service.getAll().subscribe((projects) => {
++      expect(projects.length).toBeGreaterThan(0);
++      done();
++    });
++  });
++
++  it('finds a project by id', (done) => {
++    service.getAll().subscribe((projects) => {
++      const target = projects[0];
++      service.getById(target.id).subscribe((found) => {
++        expect(found?.id).toBe(target.id);
++        done();
++      });
++    });
++  });
++
++  it('returns undefined for an unknown project id', (done) => {
++    service.getById('nonexistent').subscribe((found) => {
++      expect(found).toBeUndefined();
++      done();
++    });
++  });
++
++  it('creates a new project and it becomes findable', (done) => {
++    service
++      .create({
++        name: 'Test Project',
++        key: 'TST',
++        description: 'A test project.',
++        startDate: '2026-01-01',
++        endDate: '2026-06-01',
++        status: ProjectStatus.Planning,
++      })
++      .subscribe((created) => {
++        expect(created.name).toBe('Test Project');
++        expect(created.progress).toBe(0);
++        service.getById(created.id).subscribe((found) => {
++          expect(found?.key).toBe('TST');
++          done();
++        });
++      });
++  });
++
++  it('updates an existing project', (done) => {
++    service.getAll().subscribe((projects) => {
++      const target = projects[0];
++      service
++        .update(target.id, {
++          name: 'Renamed Project',
++          key: target.key,
++          description: target.description,
++          startDate: target.startDate,
++          endDate: target.endDate,
++          status: target.status,
++        })
++        .subscribe((updated) => {
++          expect(updated.name).toBe('Renamed Project');
++          done();
++        });
++    });
++  });
++
++  it('archives a project by setting its status', (done) => {
++    service.getAll().subscribe((projects) => {
++      const target = projects[0];
++      service.archive(target.id).subscribe((archived) => {
++        expect(archived.status).toBe(ProjectStatus.Archived);
++        done();
++      });
++    });
++  });
++
++  it('returns only members belonging to the given project', (done) => {
++    service.getMembers('proj-1').subscribe((members) => {
++      expect(members.length).toBeGreaterThan(0);
++      expect(members.every((m) => m.projectId === 'proj-1')).toBe(true);
++      done();
++    });
++  });
++
++  it('excludes existing members from the addable-users list', (done) => {
++    service.getMembers('proj-1').subscribe((members) => {
++      service.getAddableUsers('proj-1').subscribe((addable) => {
++        const memberIds = new Set(members.map((m) => m.userId));
++        expect(addable.every((u) => !memberIds.has(u.id))).toBe(true);
++        done();
++      });
++    });
++  });
++
++  it('adds a member and increments the project member count', (done) => {
++    service.getAddableUsers('proj-3').subscribe((addable) => {
++      if (addable.length === 0) {
++        return done();
++      }
++      service.getById('proj-3').subscribe((before) => {
++        service.addMember('proj-3', addable[0].id, UserRole.Developer).subscribe((member) => {
++          expect(member.projectId).toBe('proj-3');
++          service.getById('proj-3').subscribe((after) => {
++            expect(after?.memberCount).toBe((before?.memberCount ?? 0) + 1);
++            done();
++          });
++        });
++      });
++    });
++  });
++
++  it('updates a member role', (done) => {
++    service.getMembers('proj-1').subscribe((members) => {
++      const member = members[0];
++      service.updateMemberRole(member.id, UserRole.Viewer).subscribe((updated) => {
++        expect(updated.role).toBe(UserRole.Viewer);
++        done();
++      });
++    });
++  });
++
++  it('removes a member and decrements the project member count', (done) => {
++    service.getAddableUsers('proj-4').subscribe((addable) => {
++      if (addable.length === 0) {
++        return done();
++      }
++      service.addMember('proj-4', addable[0].id, UserRole.Viewer).subscribe((added) => {
++        service.getById('proj-4').subscribe((before) => {
++          service.removeMember(added.id).subscribe(() => {
++            service.getById('proj-4').subscribe((after) => {
++              expect(after?.memberCount).toBe((before?.memberCount ?? 1) - 1);
++              done();
++            });
++          });
++        });
++      });
++    });
++  });
++});
+diff --git a/src/app/core/services/project.service.ts b/src/app/core/services/project.service.ts
+index 244cb00..deb2856 100644
+--- a/src/app/core/services/project.service.ts
++++ b/src/app/core/services/project.service.ts
+@@ -1,35 +1,153 @@
+ import { Injectable } from '@angular/core';
+ import { Observable } from 'rxjs';
+-import { Project } from '../models';
++import { ProjectStatus, UserRole } from '../enums';
++import { CreateProjectPayload, Project, ProjectMember } from '../models';
+ import { MOCK_PROJECTS } from '../mock/projects.mock';
++import { MOCK_PROJECT_MEMBERS } from '../mock/project-members.mock';
++import { MOCK_USERS } from '../mock/users.mock';
+ 
+-/** Simulated network latency so loading states are visible/testable on mock data. */
+ const MOCK_LATENCY_MS = 400;
+ 
++function delayed<T>(factory: () => T): Observable<T> {
++  return new Observable<T>((subscriber) => {
++    const timeout = setTimeout(() => {
++      subscriber.next(factory());
++      subscriber.complete();
++    }, MOCK_LATENCY_MS);
++    return () => clearTimeout(timeout);
++  });
++}
++
+ /**
+- * Reads/writes project data. Backed by the mock store for now — swapped for
+- * real `GET/POST /projects` HTTP calls in Phase 11 without changing this
+- * service's public shape, so consuming components don't need to change.
++ * Reads/writes project data and membership. Backed by the mock store for
++ * now — swapped for real HTTP calls in Phase 11 without changing this
++ * service's public shape, so ProjectList/ProjectForm/ProjectDetail don't
++ * need to change when that happens.
+  */
+ @Injectable({ providedIn: 'root' })
+ export class ProjectService {
+   getAll(): Observable<Project[]> {
+-    return new Observable<Project[]>((subscriber) => {
+-      const timeout = setTimeout(() => {
+-        subscriber.next([...MOCK_PROJECTS]);
+-        subscriber.complete();
+-      }, MOCK_LATENCY_MS);
+-      return () => clearTimeout(timeout);
+-    });
++    return delayed(() => [...MOCK_PROJECTS]);
+   }
+ 
+   getById(id: string): Observable<Project | undefined> {
+-    return new Observable<Project | undefined>((subscriber) => {
+-      const timeout = setTimeout(() => {
+-        subscriber.next(MOCK_PROJECTS.find((project) => project.id === id));
+-        subscriber.complete();
+-      }, MOCK_LATENCY_MS);
+-      return () => clearTimeout(timeout);
++    return delayed(() => MOCK_PROJECTS.find((project) => project.id === id));
++  }
++
++  create(payload: CreateProjectPayload): Observable<Project> {
++    return delayed(() => {
++      const project: Project = {
++        id: `proj-${MOCK_PROJECTS.length + 1}`,
++        organizationId: 'org-1',
++        name: payload.name,
++        key: payload.key,
++        description: payload.description,
++        status: payload.status,
++        startDate: payload.startDate,
++        endDate: payload.endDate,
++        progress: 0,
++        memberCount: 0,
++        issueCount: 0,
++        createdDate: new Date().toISOString().slice(0, 10),
++      };
++      MOCK_PROJECTS.push(project);
++      return project;
++    });
++  }
++
++  update(id: string, payload: CreateProjectPayload): Observable<Project> {
++    return delayed(() => {
++      const index = MOCK_PROJECTS.findIndex((project) => project.id === id);
++      if (index === -1) {
++        throw new Error('Project not found.');
++      }
++      const updated: Project = { ...MOCK_PROJECTS[index], ...payload };
++      MOCK_PROJECTS[index] = updated;
++      return updated;
++    });
++  }
++
++  archive(id: string): Observable<Project> {
++    return delayed(() => {
++      const index = MOCK_PROJECTS.findIndex((project) => project.id === id);
++      if (index === -1) {
++        throw new Error('Project not found.');
++      }
++      MOCK_PROJECTS[index] = { ...MOCK_PROJECTS[index], status: ProjectStatus.Archived };
++      return MOCK_PROJECTS[index];
+     });
+   }
++
++  getMembers(projectId: string): Observable<ProjectMember[]> {
++    return delayed(() =>
++      MOCK_PROJECT_MEMBERS.filter((member) => member.projectId === projectId),
++    );
++  }
++
++  /** Users not already a member of the given project — for the "add member" picker. */
++  getAddableUsers(projectId: string): Observable<{ id: string; name: string; email: string }[]> {
++    return delayed(() => {
++      const memberUserIds = new Set(
++        MOCK_PROJECT_MEMBERS.filter((m) => m.projectId === projectId).map((m) => m.userId),
++      );
++      return MOCK_USERS.filter((user) => !memberUserIds.has(user.id)).map((user) => ({
++        id: user.id,
++        name: `${user.firstName} ${user.lastName}`,
++        email: user.email,
++      }));
++    });
++  }
++
++  addMember(projectId: string, userId: string, role: UserRole): Observable<ProjectMember> {
++    return delayed(() => {
++      const user = MOCK_USERS.find((u) => u.id === userId);
++      if (!user) {
++        throw new Error('User not found.');
++      }
++      const member: ProjectMember = {
++        id: `pm-${MOCK_PROJECT_MEMBERS.length + 1}`,
++        projectId,
++        userId,
++        name: `${user.firstName} ${user.lastName}`,
++        email: user.email,
++        role,
++        joinedDate: new Date().toISOString().slice(0, 10),
++      };
++      MOCK_PROJECT_MEMBERS.push(member);
++      this.bumpMemberCount(projectId, 1);
++      return member;
++    });
++  }
++
++  updateMemberRole(memberId: string, role: UserRole): Observable<ProjectMember> {
++    return delayed(() => {
++      const index = MOCK_PROJECT_MEMBERS.findIndex((m) => m.id === memberId);
++      if (index === -1) {
++        throw new Error('Member not found.');
++      }
++      MOCK_PROJECT_MEMBERS[index] = { ...MOCK_PROJECT_MEMBERS[index], role };
++      return MOCK_PROJECT_MEMBERS[index];
++    });
++  }
++
++  removeMember(memberId: string): Observable<void> {
++    return delayed(() => {
++      const index = MOCK_PROJECT_MEMBERS.findIndex((m) => m.id === memberId);
++      if (index === -1) {
++        return;
++      }
++      const [removed] = MOCK_PROJECT_MEMBERS.splice(index, 1);
++      this.bumpMemberCount(removed.projectId, -1);
++    });
++  }
++
++  private bumpMemberCount(projectId: string, delta: number): void {
++    const index = MOCK_PROJECTS.findIndex((p) => p.id === projectId);
++    if (index !== -1) {
++      MOCK_PROJECTS[index] = {
++        ...MOCK_PROJECTS[index],
++        memberCount: Math.max(0, MOCK_PROJECTS[index].memberCount + delta),
++      };
++    }
++  }
+ }
+diff --git a/src/app/features/projects/project-detail/project-detail.component.html b/src/app/features/projects/project-detail/project-detail.component.html
+new file mode 100644
+index 0000000..425fcad
+--- /dev/null
++++ b/src/app/features/projects/project-detail/project-detail.component.html
+@@ -0,0 +1,103 @@
++@if (loading()) {
++  <app-loading-spinner message="Loading project..." />
++} @else if (error()) {
++  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
++} @else {
++  @if (project(); as p) {
++  <div class="project-detail">
++    <div class="project-detail__header">
++      <div class="project-detail__heading">
++        <span class="project-detail__key">{{ p.key }}</span>
++        <h1 class="project-detail__name">{{ p.name }}</h1>
++        <app-project-status-badge [status]="p.status" />
++      </div>
++      <button mat-stroked-button color="primary" type="button" [routerLink]="['/projects', p.id, 'edit']">
++        <mat-icon>edit</mat-icon>
++        Edit Project
++      </button>
++    </div>
++
++    <mat-tab-group class="project-detail__tabs" animationDuration="0ms">
++      <mat-tab label="Overview">
++        <div class="project-detail__panel">
++          <p class="project-detail__description">{{ p.description || 'No description yet.' }}</p>
++
++          <div class="project-detail__stats">
++            <div class="project-detail__stat">
++              <span class="project-detail__stat-value">{{ p.progress }}%</span>
++              <span class="project-detail__stat-label">Progress</span>
++            </div>
++            <div class="project-detail__stat">
++              <span class="project-detail__stat-value">{{ p.memberCount }}</span>
++              <span class="project-detail__stat-label">Members</span>
++            </div>
++            <div class="project-detail__stat">
++              <span class="project-detail__stat-value">{{ p.issueCount }}</span>
++              <span class="project-detail__stat-label">Issues</span>
++            </div>
++            <div class="project-detail__stat">
++              <span class="project-detail__stat-value">{{ p.startDate }}</span>
++              <span class="project-detail__stat-label">Start Date</span>
++            </div>
++            <div class="project-detail__stat">
++              <span class="project-detail__stat-value">{{ p.endDate }}</span>
++              <span class="project-detail__stat-label">End Date</span>
++            </div>
++          </div>
++
++          <div class="project-detail__progress-track">
++            <div class="project-detail__progress-fill" [style.width.%]="p.progress"></div>
++          </div>
++        </div>
++      </mat-tab>
++
++      <mat-tab label="Issues">
++        <div class="project-detail__panel">
++          @if (issuesLoading()) {
++            <app-loading-spinner message="Loading issues..." />
++          } @else if (issues().length === 0) {
++            <app-empty-state icon="task_alt" message="No issues in this project yet." />
++          } @else {
++            <div class="project-detail__issues">
++              @for (issue of issues(); track issue.id) {
++                <a class="project-detail__issue-row" [routerLink]="['/issues', issue.id]">
++                  <span class="project-detail__issue-key">{{ issue.key }}</span>
++                  <span class="project-detail__issue-title">{{ issue.title }}</span>
++                  <app-status-badge [status]="issue.status" />
++                  <app-priority-badge [priority]="issue.priority" />
++                </a>
++              }
++            </div>
++          }
++        </div>
++      </mat-tab>
++
++      <mat-tab label="Members">
++        <div class="project-detail__panel">
++          <app-project-members [projectId]="p.id" />
++        </div>
++      </mat-tab>
++
++      <mat-tab label="Sprints">
++        <div class="project-detail__panel">
++          <app-empty-state
++            icon="event_repeat"
++            message="Sprint planning isn't available yet."
++            hint="Coming in a future phase."
++          />
++        </div>
++      </mat-tab>
++
++      <mat-tab label="Activity">
++        <div class="project-detail__panel">
++          @if (projectActivity().length === 0) {
++            <app-empty-state icon="history" message="No activity for this project yet." />
++          } @else {
++            <app-activity-timeline [activities]="projectActivity()" />
++          }
++        </div>
++      </mat-tab>
++    </mat-tab-group>
++  </div>
++  }
++}
+diff --git a/src/app/features/projects/project-detail/project-detail.component.scss b/src/app/features/projects/project-detail/project-detail.component.scss
+new file mode 100644
+index 0000000..6a91598
+--- /dev/null
++++ b/src/app/features/projects/project-detail/project-detail.component.scss
+@@ -0,0 +1,121 @@
++.project-detail__header {
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: var(--db-space-md);
++  margin-bottom: var(--db-space-md);
++  flex-wrap: wrap;
++}
++
++.project-detail__heading {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-sm);
++  flex-wrap: wrap;
++}
++
++.project-detail__key {
++  font-size: 0.8rem;
++  font-weight: 700;
++  color: var(--db-color-text-secondary);
++  letter-spacing: 0.04em;
++}
++
++.project-detail__name {
++  margin: 0;
++  font-size: 1.4rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.project-detail__tabs {
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  box-shadow: var(--db-shadow-sm);
++}
++
++.project-detail__panel {
++  padding: var(--db-space-lg);
++}
++
++.project-detail__description {
++  margin: 0 0 var(--db-space-lg);
++  color: var(--db-color-text-secondary);
++  font-size: 0.9rem;
++}
++
++.project-detail__stats {
++  display: grid;
++  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
++  gap: var(--db-space-md);
++  margin-bottom: var(--db-space-md);
++}
++
++.project-detail__stat {
++  display: flex;
++  flex-direction: column;
++}
++
++.project-detail__stat-value {
++  font-size: 1.15rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.project-detail__stat-label {
++  font-size: 0.75rem;
++  color: var(--db-color-text-secondary);
++}
++
++.project-detail__progress-track {
++  height: 8px;
++  background: var(--db-color-surface-alt);
++  border-radius: 999px;
++  overflow: hidden;
++}
++
++.project-detail__progress-fill {
++  height: 100%;
++  background: var(--db-color-primary);
++  border-radius: 999px;
++}
++
++.project-detail__issues {
++  display: flex;
++  flex-direction: column;
++}
++
++.project-detail__issue-row {
++  display: grid;
++  grid-template-columns: 72px 1fr auto auto;
++  align-items: center;
++  gap: var(--db-space-md);
++  padding: var(--db-space-sm) 4px;
++  border-bottom: 1px solid var(--db-color-border);
++  text-decoration: none;
++  color: inherit;
++  border-radius: var(--db-radius-sm);
++
++  &:last-child {
++    border-bottom: none;
++  }
++
++  &:hover {
++    background: var(--db-color-surface-alt);
++  }
++}
++
++.project-detail__issue-key {
++  font-size: 0.75rem;
++  font-weight: 600;
++  color: var(--db-color-text-secondary);
++}
++
++.project-detail__issue-title {
++  font-size: 0.85rem;
++  color: var(--db-color-text-primary);
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
+diff --git a/src/app/features/projects/project-detail/project-detail.component.ts b/src/app/features/projects/project-detail/project-detail.component.ts
+index f83355e..9c1240d 100644
+--- a/src/app/features/projects/project-detail/project-detail.component.ts
++++ b/src/app/features/projects/project-detail/project-detail.component.ts
+@@ -1,9 +1,100 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
++import { ActivatedRoute, RouterLink } from '@angular/router';
++import { MatTabsModule } from '@angular/material/tabs';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { ProjectService } from '../../../core/services/project.service';
++import { IssueService } from '../../../core/services/issue.service';
++import { DashboardService } from '../../../core/services/dashboard.service';
++import { Activity, Issue, Project } from '../../../core/models';
++import { ProjectStatusBadgeComponent } from '../../../shared/components/project-status-badge/project-status-badge.component';
++import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
++import { PriorityBadgeComponent } from '../../../shared/components/priority-badge/priority-badge.component';
++import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
++import { ErrorStateComponent } from '../../../shared/components/error-state/error-state.component';
++import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
++import { ActivityTimelineComponent } from '../../../shared/components/activity-timeline/activity-timeline.component';
++import { ProjectMembersComponent } from '../project-members/project-members.component';
+ 
+ @Component({
+   selector: 'app-project-detail',
+   standalone: true,
+-  template: `<p>Project details (overview, issues, members, sprints, activity) land here in Phase 5.</p>`,
++  imports: [
++    RouterLink,
++    MatTabsModule,
++    MatButtonModule,
++    MatIconModule,
++    ProjectStatusBadgeComponent,
++    StatusBadgeComponent,
++    PriorityBadgeComponent,
++    LoadingSpinnerComponent,
++    ErrorStateComponent,
++    EmptyStateComponent,
++    ActivityTimelineComponent,
++    ProjectMembersComponent,
++  ],
++  templateUrl: './project-detail.component.html',
++  styleUrl: './project-detail.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class ProjectDetailComponent {}
++export class ProjectDetailComponent {
++  private readonly projectService = inject(ProjectService);
++  private readonly issueService = inject(IssueService);
++  private readonly dashboardService = inject(DashboardService);
++  private readonly activatedRoute = inject(ActivatedRoute);
++
++  private readonly projectId = this.activatedRoute.snapshot.paramMap.get('id') ?? '';
++
++  readonly loading = signal(true);
++  readonly error = signal<string | null>(null);
++  readonly project = signal<Project | null>(null);
++
++  readonly issues = signal<Issue[]>([]);
++  readonly issuesLoading = signal(true);
++
++  private readonly allActivity = signal<Activity[]>([]);
++  /** Only the activity entries whose entityId matches an issue in this project. */
++  readonly projectActivity = computed(() => {
++    const issueIds = new Set(this.issues().map((issue) => issue.id));
++    return this.allActivity().filter((activity) => issueIds.has(activity.entityId));
++  });
++
++  constructor() {
++    this.load();
++  }
++
++  retry(): void {
++    this.load();
++  }
++
++  private load(): void {
++    this.loading.set(true);
++    this.error.set(null);
++
++    this.projectService.getById(this.projectId).subscribe({
++      next: (project) => {
++        if (!project) {
++          this.error.set("We couldn't find this project.");
++          this.loading.set(false);
++          return;
++        }
++        this.project.set(project);
++        this.loading.set(false);
++      },
++      error: () => {
++        this.error.set("We couldn't load this project.");
++        this.loading.set(false);
++      },
++    });
++
++    this.issuesLoading.set(true);
++    this.issueService.getByProjectId(this.projectId).subscribe((issues) => {
++      this.issues.set(issues);
++      this.issuesLoading.set(false);
++    });
++
++    this.dashboardService.getRecentActivity(20).subscribe((activity) => {
++      this.allActivity.set(activity);
++    });
++  }
++}
+diff --git a/src/app/features/projects/project-form/project-form.component.html b/src/app/features/projects/project-form/project-form.component.html
+new file mode 100644
+index 0000000..cc5c68c
+--- /dev/null
++++ b/src/app/features/projects/project-form/project-form.component.html
+@@ -0,0 +1,67 @@
++<app-page-header [title]="isEditMode ? 'Edit Project' : 'New Project'" />
++
++@if (loadingExisting()) {
++  <app-loading-spinner message="Loading project..." />
++} @else {
++  <form [formGroup]="form" (ngSubmit)="submit()" class="project-form" novalidate>
++    <mat-form-field appearance="outline" class="project-form__field">
++      <mat-label>Project Name</mat-label>
++      <input matInput formControlName="name" required />
++    </mat-form-field>
++    <app-form-error [control]="form.controls.name" label="Project name" />
++
++    <mat-form-field appearance="outline" class="project-form__field project-form__field--key">
++      <mat-label>Project Key</mat-label>
++      <input matInput formControlName="key" placeholder="DEV" required style="text-transform: uppercase" />
++      <mat-hint>2-6 uppercase letters</mat-hint>
++    </mat-form-field>
++    <app-form-error [control]="form.controls.key" label="Project key" />
++
++    <mat-form-field appearance="outline" class="project-form__field">
++      <mat-label>Description</mat-label>
++      <textarea matInput formControlName="description" rows="3" maxlength="500"></textarea>
++    </mat-form-field>
++    <app-form-error [control]="form.controls.description" label="Description" />
++
++    <div class="project-form__row">
++      <div>
++        <mat-form-field appearance="outline" class="project-form__field">
++          <mat-label>Start Date</mat-label>
++          <input matInput [matDatepicker]="startPicker" formControlName="startDate" required />
++          <mat-datepicker-toggle matIconSuffix [for]="startPicker" />
++          <mat-datepicker #startPicker />
++        </mat-form-field>
++        <app-form-error [control]="form.controls.startDate" label="Start date" />
++      </div>
++      <div>
++        <mat-form-field appearance="outline" class="project-form__field">
++          <mat-label>End Date</mat-label>
++          <input matInput [matDatepicker]="endPicker" formControlName="endDate" required />
++          <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
++          <mat-datepicker #endPicker />
++        </mat-form-field>
++        <app-form-error [control]="form.controls.endDate" label="End date" />
++      </div>
++    </div>
++
++    <mat-form-field appearance="outline" class="project-form__field">
++      <mat-label>Status</mat-label>
++      <mat-select formControlName="status" required>
++        @for (option of statusOptions; track option.value) {
++          <mat-option [value]="option.value">{{ option.label }}</mat-option>
++        }
++      </mat-select>
++    </mat-form-field>
++
++    @if (errorMessage()) {
++      <div class="project-form__error" role="alert">{{ errorMessage() }}</div>
++    }
++
++    <div class="project-form__actions">
++      <button mat-button type="button" routerLink="/projects">Cancel</button>
++      <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
++        {{ submitting() ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Project' }}
++      </button>
++    </div>
++  </form>
++}
+diff --git a/src/app/features/projects/project-form/project-form.component.scss b/src/app/features/projects/project-form/project-form.component.scss
+new file mode 100644
+index 0000000..e1d54f1
+--- /dev/null
++++ b/src/app/features/projects/project-form/project-form.component.scss
+@@ -0,0 +1,31 @@
++.project-form {
++  max-width: 560px;
++  display: flex;
++  flex-direction: column;
++}
++
++.project-form__field {
++  width: 100%;
++}
++
++.project-form__row {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: var(--db-space-md);
++}
++
++.project-form__error {
++  background: color-mix(in srgb, var(--db-color-danger) 10%, transparent);
++  color: var(--db-color-danger);
++  border-radius: var(--db-radius-sm);
++  padding: var(--db-space-sm) var(--db-space-md);
++  font-size: 0.85rem;
++  margin-bottom: var(--db-space-md);
++}
++
++.project-form__actions {
++  display: flex;
++  justify-content: flex-end;
++  gap: var(--db-space-sm);
++  margin-top: var(--db-space-sm);
++}
+diff --git a/src/app/features/projects/project-form/project-form.component.ts b/src/app/features/projects/project-form/project-form.component.ts
+index a33a35d..e437c47 100644
+--- a/src/app/features/projects/project-form/project-form.component.ts
++++ b/src/app/features/projects/project-form/project-form.component.ts
+@@ -1,9 +1,138 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
++import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
++import { ActivatedRoute, Router, RouterLink } from '@angular/router';
++import { MatFormFieldModule } from '@angular/material/form-field';
++import { MatInputModule } from '@angular/material/input';
++import { MatSelectModule } from '@angular/material/select';
++import { MatButtonModule } from '@angular/material/button';
++import { MatDatepickerModule } from '@angular/material/datepicker';
++import { MatNativeDateModule } from '@angular/material/core';
++import { ProjectStatus } from '../../../core/enums';
++import { ProjectService } from '../../../core/services/project.service';
++import { FormErrorComponent } from '../../../shared/components/form-error/form-error.component';
++import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
++import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
++import { projectKeyValidator, dateRangeValidator } from '../../../shared/utils/project-validators';
++
++const STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
++  { value: ProjectStatus.Planning, label: 'Planning' },
++  { value: ProjectStatus.Active, label: 'Active' },
++  { value: ProjectStatus.OnHold, label: 'On Hold' },
++  { value: ProjectStatus.Completed, label: 'Completed' },
++  { value: ProjectStatus.Archived, label: 'Archived' },
++];
+ 
+ @Component({
+   selector: 'app-project-form',
+   standalone: true,
+-  template: `<p>Create/edit project form lands here in Phase 5.</p>`,
++  imports: [
++    ReactiveFormsModule,
++    RouterLink,
++    MatFormFieldModule,
++    MatInputModule,
++    MatSelectModule,
++    MatButtonModule,
++    MatDatepickerModule,
++    MatNativeDateModule,
++    FormErrorComponent,
++    PageHeaderComponent,
++    LoadingSpinnerComponent,
++  ],
++  templateUrl: './project-form.component.html',
++  styleUrl: './project-form.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class ProjectFormComponent {}
++export class ProjectFormComponent {
++  private readonly fb = inject(FormBuilder);
++  private readonly projectService = inject(ProjectService);
++  private readonly router = inject(Router);
++  private readonly activatedRoute = inject(ActivatedRoute);
++
++  readonly statusOptions = STATUS_OPTIONS;
++
++  private readonly projectId = this.activatedRoute.snapshot.paramMap.get('id');
++  readonly isEditMode = this.projectId !== null;
++
++  readonly loadingExisting = signal(this.isEditMode);
++  readonly submitting = signal(false);
++  readonly errorMessage = signal<string | null>(null);
++
++  readonly form = this.fb.nonNullable.group(
++    {
++      name: ['', [Validators.required]],
++      key: ['', [Validators.required, projectKeyValidator()]],
++      description: ['', [Validators.maxLength(500)]],
++      startDate: [null as Date | null, [Validators.required]],
++      endDate: [null as Date | null, [Validators.required]],
++      status: [ProjectStatus.Planning, [Validators.required]],
++    },
++    { validators: [dateRangeValidator()] },
++  );
++
++  constructor() {
++    if (this.isEditMode && this.projectId) {
++      this.projectService.getById(this.projectId).subscribe({
++        next: (project) => {
++          if (!project) {
++            this.errorMessage.set('Project not found.');
++            this.loadingExisting.set(false);
++            return;
++          }
++          this.form.patchValue({
++            name: project.name,
++            key: project.key,
++            description: project.description,
++            startDate: new Date(project.startDate),
++            endDate: new Date(project.endDate),
++            status: project.status,
++          });
++          this.loadingExisting.set(false);
++        },
++        error: () => {
++          this.errorMessage.set("We couldn't load this project.");
++          this.loadingExisting.set(false);
++        },
++      });
++    }
++  }
++
++  submit(): void {
++    if (this.form.invalid || this.submitting()) {
++      this.form.markAllAsTouched();
++      return;
++    }
++
++    this.submitting.set(true);
++    this.errorMessage.set(null);
++
++    const raw = this.form.getRawValue();
++    const payload = {
++      name: raw.name,
++      key: raw.key.toUpperCase(),
++      description: raw.description,
++      startDate: this.toIsoDate(raw.startDate),
++      endDate: this.toIsoDate(raw.endDate),
++      status: raw.status,
++    };
++
++    const request =
++      this.isEditMode && this.projectId
++        ? this.projectService.update(this.projectId, payload)
++        : this.projectService.create(payload);
++
++    request.subscribe({
++      next: (project) => {
++        this.submitting.set(false);
++        this.router.navigate(['/projects', project.id]);
++      },
++      error: () => {
++        this.submitting.set(false);
++        this.errorMessage.set('Unable to save this project. Please try again.');
++      },
++    });
++  }
++
++  private toIsoDate(value: Date | null): string {
++    return value ? value.toISOString().slice(0, 10) : '';
++  }
++}
+diff --git a/src/app/features/projects/project-list/project-list.component.html b/src/app/features/projects/project-list/project-list.component.html
+new file mode 100644
+index 0000000..3ac91fc
+--- /dev/null
++++ b/src/app/features/projects/project-list/project-list.component.html
+@@ -0,0 +1,78 @@
++<app-page-header title="Projects" subtitle="All projects across your organization.">
++  <button mat-flat-button color="primary" type="button" routerLink="/projects/new">
++    <mat-icon>add</mat-icon>
++    New Project
++  </button>
++</app-page-header>
++
++@if (loading()) {
++  <app-loading-spinner message="Loading projects..." />
++} @else if (error()) {
++  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
++} @else if (projects().length === 0) {
++  <app-empty-state
++    icon="folder_open"
++    message="No projects found."
++    actionLabel="Create Project"
++    (action)="navigateToNew()"
++  />
++} @else {
++  <div class="project-grid">
++    @for (project of projects(); track project.id) {
++      <a class="project-card" [routerLink]="['/projects', project.id]">
++        <div class="project-card__header">
++          <span class="project-card__key">{{ project.key }}</span>
++          <app-project-status-badge [status]="project.status" />
++        </div>
++        <h2 class="project-card__name">{{ project.name }}</h2>
++        <p class="project-card__description">{{ project.description }}</p>
++
++        <div class="project-card__progress">
++          <div class="project-card__progress-track">
++            <div class="project-card__progress-fill" [style.width.%]="project.progress"></div>
++          </div>
++          <span class="project-card__progress-label">{{ project.progress }}%</span>
++        </div>
++
++        <div class="project-card__footer">
++          <span class="project-card__stat">
++            <mat-icon>group</mat-icon>
++            {{ project.memberCount }}
++          </span>
++          <span class="project-card__stat">
++            <mat-icon>task_alt</mat-icon>
++            {{ project.issueCount }}
++          </span>
++          <span class="project-card__stat project-card__stat--date">
++            Created {{ project.createdDate }}
++          </span>
++
++          <button
++            mat-icon-button
++            class="project-card__menu-trigger"
++            type="button"
++            [matMenuTriggerFor]="menu"
++            (click)="$event.preventDefault(); $event.stopPropagation()"
++            aria-label="Project actions"
++          >
++            <mat-icon>more_vert</mat-icon>
++          </button>
++          <mat-menu #menu="matMenu">
++            <a mat-menu-item [routerLink]="['/projects', project.id]">
++              <mat-icon>open_in_new</mat-icon>
++              <span>Open</span>
++            </a>
++            <a mat-menu-item [routerLink]="['/projects', project.id, 'edit']">
++              <mat-icon>edit</mat-icon>
++              <span>Edit</span>
++            </a>
++            <button mat-menu-item type="button" (click)="archive(project, $event)">
++              <mat-icon>archive</mat-icon>
++              <span>Archive</span>
++            </button>
++          </mat-menu>
++        </div>
++      </a>
++    }
++  </div>
++}
+diff --git a/src/app/features/projects/project-list/project-list.component.scss b/src/app/features/projects/project-list/project-list.component.scss
+new file mode 100644
+index 0000000..4b6a4b7
+--- /dev/null
++++ b/src/app/features/projects/project-list/project-list.component.scss
+@@ -0,0 +1,113 @@
++.project-grid {
++  display: grid;
++  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
++  gap: var(--db-space-md);
++}
++
++.project-card {
++  display: flex;
++  flex-direction: column;
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  padding: var(--db-space-lg);
++  box-shadow: var(--db-shadow-sm);
++  text-decoration: none;
++  color: inherit;
++  transition: box-shadow 0.15s ease;
++
++  &:hover {
++    box-shadow: var(--db-shadow-md);
++  }
++}
++
++.project-card__header {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  margin-bottom: var(--db-space-sm);
++}
++
++.project-card__key {
++  font-size: 0.75rem;
++  font-weight: 700;
++  letter-spacing: 0.04em;
++  color: var(--db-color-text-secondary);
++}
++
++.project-card__name {
++  margin: 0 0 4px;
++  font-size: 1.05rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.project-card__description {
++  margin: 0 0 var(--db-space-md);
++  font-size: 0.85rem;
++  color: var(--db-color-text-secondary);
++  display: -webkit-box;
++  -webkit-line-clamp: 2;
++  -webkit-box-orient: vertical;
++  overflow: hidden;
++}
++
++.project-card__progress {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-sm);
++  margin-bottom: var(--db-space-md);
++}
++
++.project-card__progress-track {
++  flex: 1;
++  height: 6px;
++  background: var(--db-color-surface-alt);
++  border-radius: 999px;
++  overflow: hidden;
++}
++
++.project-card__progress-fill {
++  height: 100%;
++  background: var(--db-color-primary);
++  border-radius: 999px;
++}
++
++.project-card__progress-label {
++  font-size: 0.75rem;
++  color: var(--db-color-text-secondary);
++}
++
++.project-card__footer {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-md);
++  margin-top: auto;
++  padding-top: var(--db-space-sm);
++  border-top: 1px solid var(--db-color-border);
++}
++
++.project-card__stat {
++  display: flex;
++  align-items: center;
++  gap: 4px;
++  font-size: 0.8rem;
++  color: var(--db-color-text-secondary);
++
++  mat-icon {
++    font-size: 16px;
++    width: 16px;
++    height: 16px;
++  }
++}
++
++.project-card__stat--date {
++  flex: 1;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.project-card__menu-trigger {
++  margin-left: auto;
++}
+diff --git a/src/app/features/projects/project-list/project-list.component.ts b/src/app/features/projects/project-list/project-list.component.ts
+index fe7fe73..7ce2ccb 100644
+--- a/src/app/features/projects/project-list/project-list.component.ts
++++ b/src/app/features/projects/project-list/project-list.component.ts
+@@ -1,9 +1,106 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
++import { Router, RouterLink } from '@angular/router';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { MatMenuModule } from '@angular/material/menu';
++import { MatDialog } from '@angular/material/dialog';
++import { MatSnackBar } from '@angular/material/snack-bar';
++import { ProjectService } from '../../../core/services/project.service';
++import { Project } from '../../../core/models';
++import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
++import { ProjectStatusBadgeComponent } from '../../../shared/components/project-status-badge/project-status-badge.component';
++import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
++import { ErrorStateComponent } from '../../../shared/components/error-state/error-state.component';
++import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
++import {
++  ConfirmDialogComponent,
++  ConfirmDialogData,
++} from '../../../shared/components/confirm-dialog/confirm-dialog.component';
+ 
+ @Component({
+   selector: 'app-project-list',
+   standalone: true,
+-  template: `<p>Project list lands here in Phase 5.</p>`,
++  imports: [
++    RouterLink,
++    MatButtonModule,
++    MatIconModule,
++    MatMenuModule,
++    PageHeaderComponent,
++    ProjectStatusBadgeComponent,
++    LoadingSpinnerComponent,
++    ErrorStateComponent,
++    EmptyStateComponent,
++  ],
++  templateUrl: './project-list.component.html',
++  styleUrl: './project-list.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class ProjectListComponent {}
++export class ProjectListComponent {
++  private readonly projectService = inject(ProjectService);
++  private readonly dialog = inject(MatDialog);
++  private readonly snackBar = inject(MatSnackBar);
++  private readonly router = inject(Router);
++
++  readonly loading = signal(true);
++  readonly error = signal<string | null>(null);
++  readonly projects = signal<Project[]>([]);
++
++  constructor() {
++    this.load();
++  }
++
++  navigateToNew(): void {
++    this.router.navigateByUrl('/projects/new');
++  }
++
++  retry(): void {
++    this.load();
++  }
++
++  archive(project: Project, event: Event): void {
++    event.preventDefault();
++    event.stopPropagation();
++
++    const data: ConfirmDialogData = {
++      title: 'Archive project?',
++      message: `"${project.name}" will be archived. You can still view it, but it will be marked as archived.`,
++      confirmLabel: 'Archive',
++      danger: true,
++    };
++
++    this.dialog
++      .open(ConfirmDialogComponent, { data })
++      .afterClosed()
++      .subscribe((confirmed) => {
++        if (!confirmed) {
++          return;
++        }
++        this.projectService.archive(project.id).subscribe({
++          next: (updated) => {
++            this.projects.update((list) =>
++              list.map((p) => (p.id === updated.id ? updated : p)),
++            );
++            this.snackBar.open(`${project.name} archived.`, undefined, { duration: 3000 });
++          },
++          error: () => {
++            this.snackBar.open('Unable to archive project.', undefined, { duration: 3000 });
++          },
++        });
++      });
++  }
++
++  private load(): void {
++    this.loading.set(true);
++    this.error.set(null);
++    this.projectService.getAll().subscribe({
++      next: (projects) => {
++        this.projects.set(projects);
++        this.loading.set(false);
++      },
++      error: () => {
++        this.error.set("We couldn't load your projects.");
++        this.loading.set(false);
++      },
++    });
++  }
++}
+diff --git a/src/app/features/projects/project-members/add-member-dialog/add-member-dialog.component.html b/src/app/features/projects/project-members/add-member-dialog/add-member-dialog.component.html
+new file mode 100644
+index 0000000..9987e63
+--- /dev/null
++++ b/src/app/features/projects/project-members/add-member-dialog/add-member-dialog.component.html
+@@ -0,0 +1,40 @@
++<h2 mat-dialog-title>Add Member</h2>
++<mat-dialog-content>
++  @if (loading()) {
++    <p class="add-member__loading">Loading users...</p>
++  } @else if (addableUsers().length === 0) {
++    <p class="add-member__empty">Everyone is already a member of this project.</p>
++  } @else {
++    <form [formGroup]="form" class="add-member__form" novalidate>
++      <mat-form-field appearance="outline" class="add-member__field">
++        <mat-label>User</mat-label>
++        <mat-select formControlName="userId" required>
++          @for (user of addableUsers(); track user.id) {
++            <mat-option [value]="user.id">{{ user.name }} ({{ user.email }})</mat-option>
++          }
++        </mat-select>
++      </mat-form-field>
++
++      <mat-form-field appearance="outline" class="add-member__field">
++        <mat-label>Role</mat-label>
++        <mat-select formControlName="role" required>
++          @for (role of roleOptions; track role) {
++            <mat-option [value]="role">{{ role }}</mat-option>
++          }
++        </mat-select>
++      </mat-form-field>
++    </form>
++  }
++</mat-dialog-content>
++<mat-dialog-actions align="end">
++  <button mat-button type="button" (click)="cancel()">Cancel</button>
++  <button
++    mat-flat-button
++    color="primary"
++    type="button"
++    [disabled]="loading() || addableUsers().length === 0 || submitting()"
++    (click)="submit()"
++  >
++    {{ submitting() ? 'Adding...' : 'Add Member' }}
++  </button>
++</mat-dialog-actions>
+diff --git a/src/app/features/projects/project-members/add-member-dialog/add-member-dialog.component.scss b/src/app/features/projects/project-members/add-member-dialog/add-member-dialog.component.scss
+new file mode 100644
+index 0000000..4a95457
+--- /dev/null
++++ b/src/app/features/projects/project-members/add-member-dialog/add-member-dialog.component.scss
+@@ -0,0 +1,17 @@
++.add-member__form {
++  display: flex;
++  flex-direction: column;
++  gap: var(--db-space-sm);
++  min-width: 320px;
++  padding-top: 4px;
++}
++
++.add-member__field {
++  width: 100%;
++}
++
++.add-member__loading,
++.add-member__empty {
++  color: var(--db-color-text-secondary);
++  font-size: 0.9rem;
++}
+diff --git a/src/app/features/projects/project-members/add-member-dialog/add-member-dialog.component.ts b/src/app/features/projects/project-members/add-member-dialog/add-member-dialog.component.ts
+new file mode 100644
+index 0000000..ebaae2c
+--- /dev/null
++++ b/src/app/features/projects/project-members/add-member-dialog/add-member-dialog.component.ts
+@@ -0,0 +1,79 @@
++import { ChangeDetectionStrategy, Component, Inject, inject, signal } from '@angular/core';
++import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
++import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
++import { MatFormFieldModule } from '@angular/material/form-field';
++import { MatSelectModule } from '@angular/material/select';
++import { MatButtonModule } from '@angular/material/button';
++import { UserRole } from '../../../../core/enums';
++import { ProjectService } from '../../../../core/services/project.service';
++
++export interface AddMemberDialogData {
++  projectId: string;
++}
++
++export interface AddableUser {
++  id: string;
++  name: string;
++  email: string;
++}
++
++const ROLE_OPTIONS = [UserRole.Manager, UserRole.Developer, UserRole.Viewer];
++
++@Component({
++  selector: 'app-add-member-dialog',
++  standalone: true,
++  imports: [
++    ReactiveFormsModule,
++    MatDialogModule,
++    MatFormFieldModule,
++    MatSelectModule,
++    MatButtonModule,
++  ],
++  templateUrl: './add-member-dialog.component.html',
++  styleUrl: './add-member-dialog.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class AddMemberDialogComponent {
++  private readonly fb = inject(FormBuilder);
++  private readonly projectService = inject(ProjectService);
++  private readonly dialogRef = inject(MatDialogRef<AddMemberDialogComponent>);
++
++  readonly roleOptions = ROLE_OPTIONS;
++  readonly addableUsers = signal<AddableUser[]>([]);
++  readonly loading = signal(true);
++  readonly submitting = signal(false);
++
++  readonly form = this.fb.nonNullable.group({
++    userId: ['', [Validators.required]],
++    role: [UserRole.Developer, [Validators.required]],
++  });
++
++  constructor(@Inject(MAT_DIALOG_DATA) private readonly data: AddMemberDialogData) {
++    this.projectService.getAddableUsers(this.data.projectId).subscribe((users) => {
++      this.addableUsers.set(users);
++      this.loading.set(false);
++    });
++  }
++
++  submit(): void {
++    if (this.form.invalid || this.submitting()) {
++      this.form.markAllAsTouched();
++      return;
++    }
++    this.submitting.set(true);
++    const { userId, role } = this.form.getRawValue();
++    this.projectService.addMember(this.data.projectId, userId, role).subscribe({
++      next: (member) => {
++        this.submitting.set(false);
++        this.dialogRef.close(member);
++      },
++      error: () => {
++        this.submitting.set(false);
++      },
++    });
++  }
++
++  cancel(): void {
++    this.dialogRef.close();
++  }
++}
+diff --git a/src/app/features/projects/project-members/project-members.component.html b/src/app/features/projects/project-members/project-members.component.html
+new file mode 100644
+index 0000000..47c1c25
+--- /dev/null
++++ b/src/app/features/projects/project-members/project-members.component.html
+@@ -0,0 +1,58 @@
++<div class="members">
++  <div class="members__header">
++    <h2 class="members__title">Members</h2>
++    <button mat-stroked-button color="primary" type="button" (click)="openAddMemberDialog()">
++      <mat-icon>person_add</mat-icon>
++      Add Member
++    </button>
++  </div>
++
++  @if (loading()) {
++    <app-loading-spinner message="Loading members..." />
++  } @else if (members().length === 0) {
++    <app-empty-state icon="group_off" message="No members yet." />
++  } @else {
++    <div class="members__table" role="table">
++      <div class="members__row members__row--header" role="row">
++        <span>Name</span>
++        <span>Email</span>
++        <span>Role</span>
++        <span>Joined</span>
++        <span></span>
++      </div>
++      @for (member of members(); track member.id) {
++        <div class="members__row" role="row">
++          <span class="members__name">{{ member.name }}</span>
++          <span class="members__email">{{ member.email }}</span>
++          <span class="members__role">{{ member.role }}</span>
++          <span class="members__joined">{{ member.joinedDate }}</span>
++          <span class="members__actions">
++            <button
++              mat-icon-button
++              type="button"
++              [matMenuTriggerFor]="roleMenu"
++              aria-label="Change role"
++            >
++              <mat-icon>swap_horiz</mat-icon>
++            </button>
++            <mat-menu #roleMenu="matMenu">
++              @for (role of roleOptions; track role) {
++                <button mat-menu-item type="button" (click)="changeRole(member, role)">
++                  {{ role }}
++                </button>
++              }
++            </mat-menu>
++            <button
++              mat-icon-button
++              type="button"
++              (click)="removeMember(member)"
++              aria-label="Remove member"
++            >
++              <mat-icon>person_remove</mat-icon>
++            </button>
++          </span>
++        </div>
++      }
++    </div>
++  }
++</div>
+diff --git a/src/app/features/projects/project-members/project-members.component.scss b/src/app/features/projects/project-members/project-members.component.scss
+new file mode 100644
+index 0000000..c78b435
+--- /dev/null
++++ b/src/app/features/projects/project-members/project-members.component.scss
+@@ -0,0 +1,55 @@
++.members__header {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  margin-bottom: var(--db-space-md);
++}
++
++.members__title {
++  margin: 0;
++  font-size: 1rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.members__table {
++  display: flex;
++  flex-direction: column;
++}
++
++.members__row {
++  display: grid;
++  grid-template-columns: 1.2fr 1.6fr 1fr 1fr auto;
++  align-items: center;
++  gap: var(--db-space-md);
++  padding: var(--db-space-sm) 4px;
++  border-bottom: 1px solid var(--db-color-border);
++  font-size: 0.85rem;
++
++  &:last-child {
++    border-bottom: none;
++  }
++}
++
++.members__row--header {
++  color: var(--db-color-text-secondary);
++  font-size: 0.75rem;
++  text-transform: uppercase;
++  letter-spacing: 0.03em;
++}
++
++.members__name {
++  font-weight: 500;
++  color: var(--db-color-text-primary);
++}
++
++.members__email,
++.members__joined {
++  color: var(--db-color-text-secondary);
++}
++
++.members__actions {
++  display: flex;
++  justify-content: flex-end;
++  gap: 2px;
++}
+diff --git a/src/app/features/projects/project-members/project-members.component.ts b/src/app/features/projects/project-members/project-members.component.ts
+new file mode 100644
+index 0000000..d71ea1d
+--- /dev/null
++++ b/src/app/features/projects/project-members/project-members.component.ts
+@@ -0,0 +1,102 @@
++import { ChangeDetectionStrategy, Component, Input, inject, signal } from '@angular/core';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { MatMenuModule } from '@angular/material/menu';
++import { MatDialog } from '@angular/material/dialog';
++import { MatSnackBar } from '@angular/material/snack-bar';
++import { UserRole } from '../../../core/enums';
++import { ProjectMember } from '../../../core/models';
++import { ProjectService } from '../../../core/services/project.service';
++import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
++import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
++import {
++  ConfirmDialogComponent,
++  ConfirmDialogData,
++} from '../../../shared/components/confirm-dialog/confirm-dialog.component';
++import { AddMemberDialogComponent } from './add-member-dialog/add-member-dialog.component';
++
++const ROLE_OPTIONS = [UserRole.Manager, UserRole.Developer, UserRole.Viewer];
++
++@Component({
++  selector: 'app-project-members',
++  standalone: true,
++  imports: [MatButtonModule, MatIconModule, MatMenuModule, LoadingSpinnerComponent, EmptyStateComponent],
++  templateUrl: './project-members.component.html',
++  styleUrl: './project-members.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class ProjectMembersComponent {
++  private readonly projectService = inject(ProjectService);
++  private readonly dialog = inject(MatDialog);
++  private readonly snackBar = inject(MatSnackBar);
++
++  private projectIdValue = '';
++  @Input({ required: true })
++  set projectId(value: string) {
++    this.projectIdValue = value;
++    this.load();
++  }
++  get projectId(): string {
++    return this.projectIdValue;
++  }
++
++  readonly roleOptions = ROLE_OPTIONS;
++  readonly loading = signal(true);
++  readonly members = signal<ProjectMember[]>([]);
++
++  openAddMemberDialog(): void {
++    this.dialog
++      .open(AddMemberDialogComponent, { data: { projectId: this.projectId } })
++      .afterClosed()
++      .subscribe((added) => {
++        if (added) {
++          this.load();
++          this.snackBar.open('Member added.', undefined, { duration: 3000 });
++        }
++      });
++  }
++
++  changeRole(member: ProjectMember, role: UserRole): void {
++    if (role === member.role) {
++      return;
++    }
++    this.projectService.updateMemberRole(member.id, role).subscribe(() => {
++      this.members.update((list) =>
++        list.map((m) => (m.id === member.id ? { ...m, role } : m)),
++      );
++      this.snackBar.open(`${member.name}'s role updated to ${role}.`, undefined, {
++        duration: 3000,
++      });
++    });
++  }
++
++  removeMember(member: ProjectMember): void {
++    const data: ConfirmDialogData = {
++      title: 'Remove member?',
++      message: `${member.name} will lose access to this project.`,
++      confirmLabel: 'Remove',
++      danger: true,
++    };
++
++    this.dialog
++      .open(ConfirmDialogComponent, { data })
++      .afterClosed()
++      .subscribe((confirmed) => {
++        if (!confirmed) {
++          return;
++        }
++        this.projectService.removeMember(member.id).subscribe(() => {
++          this.members.update((list) => list.filter((m) => m.id !== member.id));
++          this.snackBar.open(`${member.name} removed.`, undefined, { duration: 3000 });
++        });
++      });
++  }
++
++  private load(): void {
++    this.loading.set(true);
++    this.projectService.getMembers(this.projectId).subscribe((members) => {
++      this.members.set(members);
++      this.loading.set(false);
++    });
++  }
++}
+diff --git a/src/app/shared/components/confirm-dialog/confirm-dialog.component.html b/src/app/shared/components/confirm-dialog/confirm-dialog.component.html
+new file mode 100644
+index 0000000..0f4ffad
+--- /dev/null
++++ b/src/app/shared/components/confirm-dialog/confirm-dialog.component.html
+@@ -0,0 +1,13 @@
++<h2 mat-dialog-title>{{ data.title }}</h2>
++<mat-dialog-content>{{ data.message }}</mat-dialog-content>
++<mat-dialog-actions align="end">
++  <button mat-button type="button" (click)="cancel()">{{ data.cancelLabel ?? 'Cancel' }}</button>
++  <button
++    mat-flat-button
++    type="button"
++    [color]="data.danger ? 'warn' : 'primary'"
++    (click)="confirm()"
++  >
++    {{ data.confirmLabel ?? 'Confirm' }}
++  </button>
++</mat-dialog-actions>
+diff --git a/src/app/shared/components/confirm-dialog/confirm-dialog.component.scss b/src/app/shared/components/confirm-dialog/confirm-dialog.component.scss
+new file mode 100644
+index 0000000..ab03ac7
+--- /dev/null
++++ b/src/app/shared/components/confirm-dialog/confirm-dialog.component.scss
+@@ -0,0 +1,4 @@
++mat-dialog-content {
++  color: var(--db-color-text-secondary);
++  font-size: 0.9rem;
++}
+diff --git a/src/app/shared/components/confirm-dialog/confirm-dialog.component.ts b/src/app/shared/components/confirm-dialog/confirm-dialog.component.ts
+new file mode 100644
+index 0000000..341c15a
+--- /dev/null
++++ b/src/app/shared/components/confirm-dialog/confirm-dialog.component.ts
+@@ -0,0 +1,41 @@
++import { ChangeDetectionStrategy, Component, Inject } from '@angular/core';
++import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
++import { MatButtonModule } from '@angular/material/button';
++
++export interface ConfirmDialogData {
++  title: string;
++  message: string;
++  confirmLabel?: string;
++  cancelLabel?: string;
++  /** Renders the confirm button in the danger color for destructive actions. */
++  danger?: boolean;
++}
++
++/**
++ * Generic Yes/No confirmation dialog, reused for every destructive action
++ * across the app (archive project, remove member, delete issue, logout, ...).
++ * Open it with `MatDialog.open(ConfirmDialogComponent, { data })` and
++ * subscribe to `afterClosed()` — it resolves `true` on confirm, `false`/`undefined` otherwise.
++ */
++@Component({
++  selector: 'app-confirm-dialog',
++  standalone: true,
++  imports: [MatDialogModule, MatButtonModule],
++  templateUrl: './confirm-dialog.component.html',
++  styleUrl: './confirm-dialog.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class ConfirmDialogComponent {
++  constructor(
++    private readonly dialogRef: MatDialogRef<ConfirmDialogComponent, boolean>,
++    @Inject(MAT_DIALOG_DATA) readonly data: ConfirmDialogData,
++  ) {}
++
++  confirm(): void {
++    this.dialogRef.close(true);
++  }
++
++  cancel(): void {
++    this.dialogRef.close(false);
++  }
++}
+diff --git a/src/app/shared/components/form-error/form-error.component.spec.ts b/src/app/shared/components/form-error/form-error.component.spec.ts
+index 8167b1e..d5e1f21 100644
+--- a/src/app/shared/components/form-error/form-error.component.spec.ts
++++ b/src/app/shared/components/form-error/form-error.component.spec.ts
+@@ -1,6 +1,6 @@
+ import { TestBed } from '@angular/core/testing';
+ import { Component } from '@angular/core';
+-import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
++import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+ import { FormErrorComponent } from './form-error.component';
+ 
+ @Component({
+@@ -15,7 +15,41 @@ class HostComponent {
+   });
+ }
+ 
++@Component({
++  standalone: true,
++  imports: [ReactiveFormsModule, FormErrorComponent],
++  template: `<app-form-error [control]="form.controls.email" label="Email" />`,
++})
++class RequiredFieldHostComponent {
++  form = new FormGroup({
++    email: new FormControl('', [Validators.required]),
++  });
++}
++
+ describe('FormErrorComponent', () => {
++  it('shows a message from markAllAsTouched() alone, with no setErrors() call', () => {
++    // Regression test: a pristine, untouched control that is already
++    // invalid (Validators.required with an empty value) has its `errors`
++    // populated from the start — only `touched` changes when the user hits
++    // Submit. markAllAsTouched() flips that flag WITHOUT emitting through
++    // statusChanges or valueChanges, so a component that only listened to
++    // those two streams would never re-check itself and would silently
++    // show nothing on first submit of an empty form.
++    const fixture = TestBed.configureTestingModule({
++      imports: [RequiredFieldHostComponent],
++    }).createComponent(RequiredFieldHostComponent);
++    fixture.detectChanges();
++
++    let text = (fixture.nativeElement as HTMLElement).textContent ?? '';
++    expect(text).not.toContain('is required');
++
++    fixture.componentInstance.form.markAllAsTouched();
++    fixture.detectChanges();
++
++    text = (fixture.nativeElement as HTMLElement).textContent ?? '';
++    expect(text).toContain('Email is required.');
++  });
++
+   it('shows a message set imperatively on the control via setErrors, without any event on the component itself', () => {
+     const fixture = TestBed.configureTestingModule({ imports: [HostComponent] }).createComponent(
+       HostComponent,
+diff --git a/src/app/shared/components/form-error/form-error.component.ts b/src/app/shared/components/form-error/form-error.component.ts
+index 6dfbd53..8ad08e2 100644
+--- a/src/app/shared/components/form-error/form-error.component.ts
++++ b/src/app/shared/components/form-error/form-error.component.ts
+@@ -8,7 +8,7 @@ import {
+   SimpleChanges,
+ } from '@angular/core';
+ import { AbstractControl } from '@angular/forms';
+-import { Subscription, merge } from 'rxjs';
++import { Subscription } from 'rxjs';
+ 
+ /**
+  * Maps a validator error key to its display message. Centralized here so
+@@ -66,19 +66,19 @@ export class FormErrorComponent implements OnChanges, OnDestroy {
+ 
+   ngOnChanges(changes: SimpleChanges): void {
+     if ('control' in changes) {
+-      // The control can carry errors that were set imperatively (e.g. a
+-      // cross-field validator calling confirm.setErrors(...) on a *sibling*
+-      // control). OnPush won't re-check this component on its own in that
+-      // case — no local event fired and the @Input reference didn't change —
+-      // so we subscribe to the control's own change streams and force a
+-      // check whenever either fires.
++      // The control's displayed error can change for reasons this component
++      // never sees directly: a cross-field validator on a *sibling* control
++      // calling setErrors() imperatively, or — the case that mattered most
++      // in practice — form.markAllAsTouched() on submit, which flips
++      // `touched` without emitting through statusChanges or valueChanges at
++      // all. `control.events` is the one stream that covers every one of
++      // these (TouchedChangeEvent, StatusChangeEvent, ValueChangeEvent), so
++      // subscribe to it and force a check on every emission.
+       this.subscription?.unsubscribe();
+       this.subscription = null;
+ 
+       if (this.control) {
+-        this.subscription = merge(this.control.statusChanges, this.control.valueChanges).subscribe(
+-          () => this.cdr.markForCheck(),
+-        );
++        this.subscription = this.control.events.subscribe(() => this.cdr.markForCheck());
+       }
+     }
+   }
+diff --git a/src/app/shared/components/page-header/page-header.component.html b/src/app/shared/components/page-header/page-header.component.html
+new file mode 100644
+index 0000000..dadff7a
+--- /dev/null
++++ b/src/app/shared/components/page-header/page-header.component.html
+@@ -0,0 +1,11 @@
++<div class="page-header">
++  <div class="page-header__text">
++    <h1 class="page-header__title">{{ title }}</h1>
++    @if (subtitle) {
++      <p class="page-header__subtitle">{{ subtitle }}</p>
++    }
++  </div>
++  <div class="page-header__actions">
++    <ng-content />
++  </div>
++</div>
+diff --git a/src/app/shared/components/page-header/page-header.component.scss b/src/app/shared/components/page-header/page-header.component.scss
+new file mode 100644
+index 0000000..f962d45
+--- /dev/null
++++ b/src/app/shared/components/page-header/page-header.component.scss
+@@ -0,0 +1,28 @@
++.page-header {
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: var(--db-space-md);
++  margin-bottom: var(--db-space-lg);
++  flex-wrap: wrap;
++}
++
++.page-header__title {
++  margin: 0;
++  font-size: 1.5rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.page-header__subtitle {
++  margin: 4px 0 0;
++  color: var(--db-color-text-secondary);
++  font-size: 0.9rem;
++}
++
++.page-header__actions {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-sm);
++  flex-shrink: 0;
++}
+diff --git a/src/app/shared/components/page-header/page-header.component.ts b/src/app/shared/components/page-header/page-header.component.ts
+new file mode 100644
+index 0000000..7440c3e
+--- /dev/null
++++ b/src/app/shared/components/page-header/page-header.component.ts
+@@ -0,0 +1,13 @@
++import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
++
++@Component({
++  selector: 'app-page-header',
++  standalone: true,
++  templateUrl: './page-header.component.html',
++  styleUrl: './page-header.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class PageHeaderComponent {
++  @Input({ required: true }) title = '';
++  @Input() subtitle = '';
++}
+diff --git a/src/app/shared/components/project-status-badge/project-status-badge.component.html b/src/app/shared/components/project-status-badge/project-status-badge.component.html
+new file mode 100644
+index 0000000..954f841
+--- /dev/null
++++ b/src/app/shared/components/project-status-badge/project-status-badge.component.html
+@@ -0,0 +1 @@
++<span class="project-status-badge" [ngClass]="cssClass()">{{ label() }}</span>
+diff --git a/src/app/shared/components/project-status-badge/project-status-badge.component.scss b/src/app/shared/components/project-status-badge/project-status-badge.component.scss
+new file mode 100644
+index 0000000..15068c5
+--- /dev/null
++++ b/src/app/shared/components/project-status-badge/project-status-badge.component.scss
+@@ -0,0 +1,30 @@
++.project-status-badge {
++  display: inline-flex;
++  align-items: center;
++  padding: 2px 10px;
++  border-radius: 999px;
++  font-size: 0.75rem;
++  font-weight: 500;
++  white-space: nowrap;
++}
++
++.project-status-badge--planning {
++  background: color-mix(in srgb, var(--db-color-text-secondary) 15%, transparent);
++  color: var(--db-color-text-secondary);
++}
++.project-status-badge--active {
++  background: color-mix(in srgb, var(--db-color-success) 15%, transparent);
++  color: var(--db-color-success);
++}
++.project-status-badge--on-hold {
++  background: color-mix(in srgb, var(--db-color-warning) 15%, transparent);
++  color: var(--db-color-warning);
++}
++.project-status-badge--completed {
++  background: color-mix(in srgb, var(--db-color-primary) 15%, transparent);
++  color: var(--db-color-primary);
++}
++.project-status-badge--archived {
++  background: color-mix(in srgb, var(--db-color-text-disabled) 20%, transparent);
++  color: var(--db-color-text-secondary);
++}
+diff --git a/src/app/shared/components/project-status-badge/project-status-badge.component.ts b/src/app/shared/components/project-status-badge/project-status-badge.component.ts
+new file mode 100644
+index 0000000..3954422
+--- /dev/null
++++ b/src/app/shared/components/project-status-badge/project-status-badge.component.ts
+@@ -0,0 +1,36 @@
++import { ChangeDetectionStrategy, Component, Input, computed, signal } from '@angular/core';
++import { NgClass } from '@angular/common';
++import { ProjectStatus } from '../../../core/enums';
++
++const LABELS: Record<ProjectStatus, string> = {
++  [ProjectStatus.Planning]: 'Planning',
++  [ProjectStatus.Active]: 'Active',
++  [ProjectStatus.OnHold]: 'On Hold',
++  [ProjectStatus.Completed]: 'Completed',
++  [ProjectStatus.Archived]: 'Archived',
++};
++
++@Component({
++  selector: 'app-project-status-badge',
++  standalone: true,
++  imports: [NgClass],
++  templateUrl: './project-status-badge.component.html',
++  styleUrl: './project-status-badge.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class ProjectStatusBadgeComponent {
++  private readonly statusSignal = signal<ProjectStatus>(ProjectStatus.Planning);
++
++  @Input({ required: true })
++  set status(value: ProjectStatus) {
++    this.statusSignal.set(value);
++  }
++  get status(): ProjectStatus {
++    return this.statusSignal();
++  }
++
++  readonly label = computed(() => LABELS[this.statusSignal()]);
++  readonly cssClass = computed(
++    () => `project-status-badge--${this.statusSignal().toLowerCase().replace(/_/g, '-')}`,
++  );
++}
+diff --git a/src/app/shared/utils/project-validators.spec.ts b/src/app/shared/utils/project-validators.spec.ts
+new file mode 100644
+index 0000000..500c800
+--- /dev/null
++++ b/src/app/shared/utils/project-validators.spec.ts
+@@ -0,0 +1,71 @@
++import { FormControl, FormGroup } from '@angular/forms';
++import { dateRangeValidator, projectKeyValidator } from './project-validators';
++
++describe('projectKeyValidator', () => {
++  const validator = projectKeyValidator();
++
++  it('allows a valid 2-6 uppercase letter key', () => {
++    expect(validator(new FormControl('DEV'))).toBeNull();
++    expect(validator(new FormControl('BILL'))).toBeNull();
++  });
++
++  it('rejects lowercase letters', () => {
++    expect(validator(new FormControl('dev'))).toEqual({ projectKeyFormat: true });
++  });
++
++  it('rejects keys shorter than 2 or longer than 6 characters', () => {
++    expect(validator(new FormControl('D'))).toEqual({ projectKeyFormat: true });
++    expect(validator(new FormControl('TOOLONGKEY'))).toEqual({ projectKeyFormat: true });
++  });
++
++  it('rejects numbers or symbols', () => {
++    expect(validator(new FormControl('DEV1'))).toEqual({ projectKeyFormat: true });
++  });
++
++  it('does not flag an empty value (leaves that to `required`)', () => {
++    expect(validator(new FormControl(''))).toBeNull();
++  });
++});
++
++describe('dateRangeValidator', () => {
++  function buildGroup(startDate: string, endDate: string): FormGroup {
++    return new FormGroup(
++      {
++        startDate: new FormControl(startDate),
++        endDate: new FormControl(endDate),
++      },
++      { validators: [dateRangeValidator()] },
++    );
++  }
++
++  it('sets no error when end is after start', () => {
++    const group = buildGroup('2026-01-01', '2026-06-01');
++    expect(group.get('endDate')?.errors).toBeNull();
++  });
++
++  it('sets dateRange on the end control when end is before start', () => {
++    const group = buildGroup('2026-06-01', '2026-01-01');
++    expect(group.get('endDate')?.errors).toEqual({ dateRange: true });
++  });
++
++  it('allows end date equal to start date', () => {
++    const group = buildGroup('2026-01-01', '2026-01-01');
++    expect(group.get('endDate')?.errors).toBeNull();
++  });
++
++  it('clears a previously-set dateRange error once corrected', () => {
++    const group = buildGroup('2026-06-01', '2026-01-01');
++    expect(group.get('endDate')?.errors).toEqual({ dateRange: true });
++
++    group.get('endDate')?.setValue('2026-12-01');
++    expect(group.get('endDate')?.errors).toBeNull();
++  });
++
++  it('preserves other errors already on the end control', () => {
++    const group = buildGroup('2026-06-01', '2026-01-01');
++    group.get('endDate')?.setErrors({ ...group.get('endDate')?.errors, required: true });
++    group.get('startDate')?.setValue('2026-06-02'); // re-trigger group validator
++
++    expect(group.get('endDate')?.errors).toEqual({ required: true, dateRange: true });
++  });
++});
+diff --git a/src/app/shared/utils/project-validators.ts b/src/app/shared/utils/project-validators.ts
+new file mode 100644
+index 0000000..0617a9a
+--- /dev/null
++++ b/src/app/shared/utils/project-validators.ts
+@@ -0,0 +1,47 @@
++import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
++
++/** 2-6 uppercase letters, e.g. "DEV", "BILL" — matches the MOCK_PROJECTS convention. */
++const PROJECT_KEY_PATTERN = /^[A-Z]{2,6}$/;
++
++export function projectKeyValidator(): ValidatorFn {
++  return (control: AbstractControl): ValidationErrors | null => {
++    const value: string = control.value ?? '';
++    if (!value) {
++      return null; // let `required` own the empty case
++    }
++    return PROJECT_KEY_PATTERN.test(value) ? null : { projectKeyFormat: true };
++  };
++}
++
++/**
++ * Cross-field validator for a FormGroup with startDate/endDate controls.
++ * Sets `dateRange` on the endDate control itself so `app-form-error` can
++ * show it inline under that field, mirroring passwordsMatchValidator's
++ * approach for the same reason (a group-level-only error has nowhere
++ * natural to render).
++ */
++export function dateRangeValidator(
++  startControlName = 'startDate',
++  endControlName = 'endDate',
++): ValidatorFn {
++  return (group: AbstractControl): ValidationErrors | null => {
++    const start = group.get(startControlName);
++    const end = group.get(endControlName);
++    if (!start || !end || !start.value || !end.value) {
++      return null;
++    }
++
++    const invalid = new Date(end.value).getTime() < new Date(start.value).getTime();
++
++    const existingErrors = end.errors;
++    if (invalid) {
++      end.setErrors({ ...existingErrors, dateRange: true });
++    } else if (existingErrors) {
++      const rest = { ...existingErrors };
++      delete rest['dateRange'];
++      end.setErrors(Object.keys(rest).length > 0 ? rest : null);
++    }
++
++    return null;
++  };
++}

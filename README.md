@@ -18,7 +18,7 @@ API later without UI rewrites.
 - Profile and settings
 - Responsive layout (desktop, tablet, mobile) with light/dark theming groundwork
 
-> **Status:** Phases 1–4 (Foundation, Layout, Authentication, Dashboard) complete. See
+> **Status:** Phases 1–5 (Foundation, Layout, Authentication, Dashboard, Projects) complete. See
 > [Project Structure](#project-structure) and [Frontend Development Phases](#frontend-development-phases)
 > below for what's implemented vs. planned.
 >
@@ -99,7 +99,7 @@ src/environments/    # apiBaseUrl, useMockData — swapped per build configurati
 2. **Layout** ✅ — main layout, sidebar, navbar, breadcrumbs, responsive drawer
 3. **Authentication** ✅ — login, register, auth service/state, guards, interceptor
 4. **Dashboard** ✅ — statistics, charts, recent activity, assigned issues, project progress
-5. **Projects** — list, details, create/edit, members
+5. **Projects** ✅ — list, details, create/edit, members
 6. **Issues** — list, create/edit, details, comments, activity, search/filter/sort/pagination
 7. **Kanban** — board, columns, drag-and-drop, filtering
 8. **Notifications** — center, unread count, mark read/all read

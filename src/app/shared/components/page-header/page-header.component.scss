@@ -1,0 +1,28 @@
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--db-space-md);
+  margin-bottom: var(--db-space-lg);
+  flex-wrap: wrap;
+}
+
+.page-header__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.page-header__subtitle {
+  margin: 4px 0 0;
+  color: var(--db-color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-sm);
+  flex-shrink: 0;
+}

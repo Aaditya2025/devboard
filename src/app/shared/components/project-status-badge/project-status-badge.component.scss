@@ -1,0 +1,30 @@
+.project-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.project-status-badge--planning {
+  background: color-mix(in srgb, var(--db-color-text-secondary) 15%, transparent);
+  color: var(--db-color-text-secondary);
+}
+.project-status-badge--active {
+  background: color-mix(in srgb, var(--db-color-success) 15%, transparent);
+  color: var(--db-color-success);
+}
+.project-status-badge--on-hold {
+  background: color-mix(in srgb, var(--db-color-warning) 15%, transparent);
+  color: var(--db-color-warning);
+}
+.project-status-badge--completed {
+  background: color-mix(in srgb, var(--db-color-primary) 15%, transparent);
+  color: var(--db-color-primary);
+}
+.project-status-badge--archived {
+  background: color-mix(in srgb, var(--db-color-text-disabled) 20%, transparent);
+  color: var(--db-color-text-secondary);
+}

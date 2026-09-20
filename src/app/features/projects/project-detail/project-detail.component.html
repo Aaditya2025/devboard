@@ -1,0 +1,103 @@
+@if (loading()) {
+  <app-loading-spinner message="Loading project..." />
+} @else if (error()) {
+  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
+} @else {
+  @if (project(); as p) {
+  <div class="project-detail">
+    <div class="project-detail__header">
+      <div class="project-detail__heading">
+        <span class="project-detail__key">{{ p.key }}</span>
+        <h1 class="project-detail__name">{{ p.name }}</h1>
+        <app-project-status-badge [status]="p.status" />
+      </div>
+      <button mat-stroked-button color="primary" type="button" [routerLink]="['/projects', p.id, 'edit']">
+        <mat-icon>edit</mat-icon>
+        Edit Project
+      </button>
+    </div>
+
+    <mat-tab-group class="project-detail__tabs" animationDuration="0ms">
+      <mat-tab label="Overview">
+        <div class="project-detail__panel">
+          <p class="project-detail__description">{{ p.description || 'No description yet.' }}</p>
+
+          <div class="project-detail__stats">
+            <div class="project-detail__stat">
+              <span class="project-detail__stat-value">{{ p.progress }}%</span>
+              <span class="project-detail__stat-label">Progress</span>
+            </div>
+            <div class="project-detail__stat">
+              <span class="project-detail__stat-value">{{ p.memberCount }}</span>
+              <span class="project-detail__stat-label">Members</span>
+            </div>
+            <div class="project-detail__stat">
+              <span class="project-detail__stat-value">{{ p.issueCount }}</span>
+              <span class="project-detail__stat-label">Issues</span>
+            </div>
+            <div class="project-detail__stat">
+              <span class="project-detail__stat-value">{{ p.startDate }}</span>
+              <span class="project-detail__stat-label">Start Date</span>
+            </div>
+            <div class="project-detail__stat">
+              <span class="project-detail__stat-value">{{ p.endDate }}</span>
+              <span class="project-detail__stat-label">End Date</span>
+            </div>
+          </div>
+
+          <div class="project-detail__progress-track">
+            <div class="project-detail__progress-fill" [style.width.%]="p.progress"></div>
+          </div>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Issues">
+        <div class="project-detail__panel">
+          @if (issuesLoading()) {
+            <app-loading-spinner message="Loading issues..." />
+          } @else if (issues().length === 0) {
+            <app-empty-state icon="task_alt" message="No issues in this project yet." />
+          } @else {
+            <div class="project-detail__issues">
+              @for (issue of issues(); track issue.id) {
+                <a class="project-detail__issue-row" [routerLink]="['/issues', issue.id]">
+                  <span class="project-detail__issue-key">{{ issue.key }}</span>
+                  <span class="project-detail__issue-title">{{ issue.title }}</span>
+                  <app-status-badge [status]="issue.status" />
+                  <app-priority-badge [priority]="issue.priority" />
+                </a>
+              }
+            </div>
+          }
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Members">
+        <div class="project-detail__panel">
+          <app-project-members [projectId]="p.id" />
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Sprints">
+        <div class="project-detail__panel">
+          <app-empty-state
+            icon="event_repeat"
+            message="Sprint planning isn't available yet."
+            hint="Coming in a future phase."
+          />
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Activity">
+        <div class="project-detail__panel">
+          @if (projectActivity().length === 0) {
+            <app-empty-state icon="history" message="No activity for this project yet." />
+          } @else {
+            <app-activity-timeline [activities]="projectActivity()" />
+          }
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </div>
+  }
+}

@@ -1,0 +1,121 @@
+.project-detail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--db-space-md);
+  margin-bottom: var(--db-space-md);
+  flex-wrap: wrap;
+}
+
+.project-detail__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-sm);
+  flex-wrap: wrap;
+}
+
+.project-detail__key {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--db-color-text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.project-detail__name {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.project-detail__tabs {
+  background: var(--db-color-surface);
+  border: 1px solid var(--db-color-border);
+  border-radius: var(--db-radius-md);
+  box-shadow: var(--db-shadow-sm);
+}
+
+.project-detail__panel {
+  padding: var(--db-space-lg);
+}
+
+.project-detail__description {
+  margin: 0 0 var(--db-space-lg);
+  color: var(--db-color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.project-detail__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--db-space-md);
+  margin-bottom: var(--db-space-md);
+}
+
+.project-detail__stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-detail__stat-value {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.project-detail__stat-label {
+  font-size: 0.75rem;
+  color: var(--db-color-text-secondary);
+}
+
+.project-detail__progress-track {
+  height: 8px;
+  background: var(--db-color-surface-alt);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.project-detail__progress-fill {
+  height: 100%;
+  background: var(--db-color-primary);
+  border-radius: 999px;
+}
+
+.project-detail__issues {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-detail__issue-row {
+  display: grid;
+  grid-template-columns: 72px 1fr auto auto;
+  align-items: center;
+  gap: var(--db-space-md);
+  padding: var(--db-space-sm) 4px;
+  border-bottom: 1px solid var(--db-color-border);
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--db-radius-sm);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--db-color-surface-alt);
+  }
+}
+
+.project-detail__issue-key {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--db-color-text-secondary);
+}
+
+.project-detail__issue-title {
+  font-size: 0.85rem;
+  color: var(--db-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

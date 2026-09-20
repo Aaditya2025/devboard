@@ -1,0 +1,2273 @@
+diff --git a/README.md b/README.md
+index 678894f..3c32c17 100644
+--- a/README.md
++++ b/README.md
+@@ -18,7 +18,8 @@ API later without UI rewrites.
+ - Profile and settings
+ - Responsive layout (desktop, tablet, mobile) with light/dark theming groundwork
+ 
+-> **Status:** Phases 1–5 (Foundation, Layout, Authentication, Dashboard, Projects) complete. See
++> **Status:** Phases 1–6 (Foundation, Layout, Authentication, Dashboard, Projects, Issues)
++> complete. See
+ > [Project Structure](#project-structure) and [Frontend Development Phases](#frontend-development-phases)
+ > below for what's implemented vs. planned.
+ >
+@@ -100,7 +101,7 @@ src/environments/    # apiBaseUrl, useMockData — swapped per build configurati
+ 3. **Authentication** ✅ — login, register, auth service/state, guards, interceptor
+ 4. **Dashboard** ✅ — statistics, charts, recent activity, assigned issues, project progress
+ 5. **Projects** ✅ — list, details, create/edit, members
+-6. **Issues** — list, create/edit, details, comments, activity, search/filter/sort/pagination
++6. **Issues** ✅ — list, create/edit, details, comments, activity, search/filter/sort/pagination
+ 7. **Kanban** — board, columns, drag-and-drop, filtering
+ 8. **Notifications** — center, unread count, mark read/all read
+ 9. **Profile/Settings** — profile, password, preferences
+diff --git a/src/app/core/mock/comments.mock.ts b/src/app/core/mock/comments.mock.ts
+new file mode 100644
+index 0000000..9ae4244
+--- /dev/null
++++ b/src/app/core/mock/comments.mock.ts
+@@ -0,0 +1,33 @@
++import { Comment } from '../models';
++
++/** Minutes-ago offset from "now", so relative-time formatting always looks live regardless of when this app is actually run. */
++function minutesAgo(minutes: number): string {
++  return new Date(Date.now() - minutes * 60_000).toISOString();
++}
++
++export const MOCK_COMMENTS: Comment[] = [
++  {
++    id: 'comment-1',
++    issueId: 'issue-1',
++    userId: 'user-2',
++    userName: 'Rahul Verma',
++    content: "I can reproduce this on staging — looks like the token refresh is racing with the logout redirect.",
++    createdDate: minutesAgo(180),
++  },
++  {
++    id: 'comment-2',
++    issueId: 'issue-1',
++    userId: 'user-1',
++    userName: 'Aditya Sharma',
++    content: 'Good catch. Pushing a fix that debounces the refresh call now.',
++    createdDate: minutesAgo(90),
++  },
++  {
++    id: 'comment-3',
++    issueId: 'issue-4',
++    userId: 'user-1',
++    userName: 'Aditya Sharma',
++    content: 'What happens if the upgrade happens on the last day of the billing cycle?',
++    createdDate: minutesAgo(45),
++  },
++];
+diff --git a/src/app/core/mock/labels.mock.ts b/src/app/core/mock/labels.mock.ts
+new file mode 100644
+index 0000000..9add08e
+--- /dev/null
++++ b/src/app/core/mock/labels.mock.ts
+@@ -0,0 +1,10 @@
++import { Label } from '../models';
++
++export const ALL_LABELS: Label[] = [
++  { id: 'label-bug', name: 'bug', color: '#e53935' },
++  { id: 'label-feature', name: 'feature', color: '#1e88e5' },
++  { id: 'label-chore', name: 'chore', color: '#78909c' },
++  { id: 'label-ux', name: 'ux', color: '#8e24aa' },
++  { id: 'label-docs', name: 'docs', color: '#43a047' },
++  { id: 'label-performance', name: 'performance', color: '#fb8c00' },
++];
+diff --git a/src/app/core/services/comment.service.spec.ts b/src/app/core/services/comment.service.spec.ts
+new file mode 100644
+index 0000000..c4a0df6
+--- /dev/null
++++ b/src/app/core/services/comment.service.spec.ts
+@@ -0,0 +1,57 @@
++import { TestBed } from '@angular/core/testing';
++import { CommentService } from './comment.service';
++
++describe('CommentService', () => {
++  let service: CommentService;
++
++  beforeEach(() => {
++    TestBed.configureTestingModule({});
++    service = TestBed.inject(CommentService);
++  });
++
++  it('returns comments for an issue sorted oldest first', (done) => {
++    service.getByIssueId('issue-1').subscribe((comments) => {
++      expect(comments.length).toBeGreaterThan(0);
++      const dates = comments.map((c) => new Date(c.createdDate).getTime());
++      expect(dates).toEqual([...dates].sort((a, b) => a - b));
++      done();
++    });
++  });
++
++  it('returns an empty array for an issue with no comments', (done) => {
++    service.getByIssueId('issue-nonexistent').subscribe((comments) => {
++      expect(comments).toEqual([]);
++      done();
++    });
++  });
++
++  it('creates a comment with the given author and content', (done) => {
++    service.create('issue-2', 'user-1', 'Aditya Sharma', 'A new test comment.').subscribe((comment) => {
++      expect(comment.issueId).toBe('issue-2');
++      expect(comment.userName).toBe('Aditya Sharma');
++      expect(comment.content).toBe('A new test comment.');
++      done();
++    });
++  });
++
++  it('updates a comment content and sets updatedDate', (done) => {
++    service.create('issue-2', 'user-1', 'Aditya Sharma', 'Original content.').subscribe((created) => {
++      service.update(created.id, 'Edited content.').subscribe((updated) => {
++        expect(updated.content).toBe('Edited content.');
++        expect(updated.updatedDate).toBeTruthy();
++        done();
++      });
++    });
++  });
++
++  it('deletes a comment', (done) => {
++    service.create('issue-2', 'user-1', 'Aditya Sharma', 'To be deleted.').subscribe((created) => {
++      service.delete(created.id).subscribe(() => {
++        service.getByIssueId('issue-2').subscribe((comments) => {
++          expect(comments.find((c) => c.id === created.id)).toBeUndefined();
++          done();
++        });
++      });
++    });
++  });
++});
+diff --git a/src/app/core/services/comment.service.ts b/src/app/core/services/comment.service.ts
+new file mode 100644
+index 0000000..db71c82
+--- /dev/null
++++ b/src/app/core/services/comment.service.ts
+@@ -0,0 +1,66 @@
++import { Injectable } from '@angular/core';
++import { Observable } from 'rxjs';
++import { Comment } from '../models';
++import { MOCK_COMMENTS } from '../mock/comments.mock';
++
++const MOCK_LATENCY_MS = 350;
++
++function delayed<T>(factory: () => T): Observable<T> {
++  return new Observable<T>((subscriber) => {
++    const timeout = setTimeout(() => {
++      subscriber.next(factory());
++      subscriber.complete();
++    }, MOCK_LATENCY_MS);
++    return () => clearTimeout(timeout);
++  });
++}
++
++@Injectable({ providedIn: 'root' })
++export class CommentService {
++  getByIssueId(issueId: string): Observable<Comment[]> {
++    return delayed(() =>
++      MOCK_COMMENTS.filter((c) => c.issueId === issueId).sort(
++        (a, b) => new Date(a.createdDate).getTime() - new Date(b.createdDate).getTime(),
++      ),
++    );
++  }
++
++  create(issueId: string, userId: string, userName: string, content: string): Observable<Comment> {
++    return delayed(() => {
++      const comment: Comment = {
++        id: `comment-${MOCK_COMMENTS.length + 1}`,
++        issueId,
++        userId,
++        userName,
++        content,
++        createdDate: new Date().toISOString(),
++      };
++      MOCK_COMMENTS.push(comment);
++      return comment;
++    });
++  }
++
++  update(commentId: string, content: string): Observable<Comment> {
++    return delayed(() => {
++      const index = MOCK_COMMENTS.findIndex((c) => c.id === commentId);
++      if (index === -1) {
++        throw new Error('Comment not found.');
++      }
++      MOCK_COMMENTS[index] = {
++        ...MOCK_COMMENTS[index],
++        content,
++        updatedDate: new Date().toISOString(),
++      };
++      return MOCK_COMMENTS[index];
++    });
++  }
++
++  delete(commentId: string): Observable<void> {
++    return delayed(() => {
++      const index = MOCK_COMMENTS.findIndex((c) => c.id === commentId);
++      if (index !== -1) {
++        MOCK_COMMENTS.splice(index, 1);
++      }
++    });
++  }
++}
+diff --git a/src/app/core/services/issue.service.spec.ts b/src/app/core/services/issue.service.spec.ts
+new file mode 100644
+index 0000000..2f46aeb
+--- /dev/null
++++ b/src/app/core/services/issue.service.spec.ts
+@@ -0,0 +1,156 @@
++import { TestBed } from '@angular/core/testing';
++import { IssueService } from './issue.service';
++import { IssuePriority, IssueStatus } from '../enums';
++
++describe('IssueService', () => {
++  let service: IssueService;
++
++  beforeEach(() => {
++    TestBed.configureTestingModule({});
++    service = TestBed.inject(IssueService);
++  });
++
++  describe('getFiltered', () => {
++    it('returns a paginated response shape', (done) => {
++      service.getFiltered({}).subscribe((result) => {
++        expect(result.items.length).toBeGreaterThan(0);
++        expect(result.page).toBe(1);
++        expect(result.totalItems).toBeGreaterThan(0);
++        expect(result.totalPages).toBeGreaterThan(0);
++        done();
++      });
++    });
++
++    it('filters by search term across title and key', (done) => {
++      service.getFiltered({ search: 'login' }).subscribe((result) => {
++        expect(result.items.length).toBeGreaterThan(0);
++        expect(
++          result.items.every(
++            (issue) =>
++              issue.title.toLowerCase().includes('login') || issue.key.toLowerCase().includes('login'),
++          ),
++        ).toBe(true);
++        done();
++      });
++    });
++
++    it('filters by status', (done) => {
++      service.getFiltered({ status: IssueStatus.Done }).subscribe((result) => {
++        expect(result.items.every((issue) => issue.status === IssueStatus.Done)).toBe(true);
++        done();
++      });
++    });
++
++    it('filters by priority', (done) => {
++      service.getFiltered({ priority: IssuePriority.Critical }).subscribe((result) => {
++        expect(result.items.every((issue) => issue.priority === IssuePriority.Critical)).toBe(true);
++        done();
++      });
++    });
++
++    it('filters by project', (done) => {
++      service.getFiltered({ projectId: 'proj-1' }).subscribe((result) => {
++        expect(result.items.every((issue) => issue.projectId === 'proj-1')).toBe(true);
++        done();
++      });
++    });
++
++    it('combines multiple filters (AND, not OR)', (done) => {
++      service
++        .getFiltered({ projectId: 'proj-1', status: IssueStatus.Done })
++        .subscribe((result) => {
++          expect(
++            result.items.every(
++              (issue) => issue.projectId === 'proj-1' && issue.status === IssueStatus.Done,
++            ),
++          ).toBe(true);
++          done();
++        });
++    });
++
++    it('returns an empty page (not an error) when no issues match', (done) => {
++      service.getFiltered({ search: 'nonexistent-xyz-123' }).subscribe((result) => {
++        expect(result.items).toEqual([]);
++        expect(result.totalItems).toBe(0);
++        done();
++      });
++    });
++
++    it('sorts ascending by the given field', (done) => {
++      service.getFiltered({ sortBy: 'createdDate', sortDirection: 'asc' }).subscribe((result) => {
++        const dates = result.items.map((i) => i.createdDate);
++        expect(dates).toEqual([...dates].sort());
++        done();
++      });
++    });
++
++    it('sorts descending by the given field', (done) => {
++      service.getFiltered({ sortBy: 'createdDate', sortDirection: 'desc' }).subscribe((result) => {
++        const dates = result.items.map((i) => i.createdDate);
++        expect(dates).toEqual([...dates].sort().reverse());
++        done();
++      });
++    });
++
++    it('paginates results according to pageSize', (done) => {
++      service.getFiltered({ pageSize: 2, page: 1 }).subscribe((result) => {
++        expect(result.items.length).toBe(2);
++        expect(result.pageSize).toBe(2);
++        done();
++      });
++    });
++
++    it('clamps an out-of-range page to the last valid page', (done) => {
++      service.getFiltered({ pageSize: 2, page: 9999 }).subscribe((result) => {
++        expect(result.page).toBe(result.totalPages);
++        done();
++      });
++    });
++  });
++
++  describe('CRUD', () => {
++    it('creates an issue with a generated key based on the project prefix', (done) => {
++      service
++        .create({
++          title: 'New test issue',
++          description: '',
++          projectId: 'proj-1',
++          status: IssueStatus.Backlog,
++          priority: IssuePriority.Low,
++          assigneeId: null,
++          labelIds: [],
++          sprintId: null,
++          dueDate: null,
++        })
++        .subscribe((created) => {
++          expect(created.key.startsWith('DEV-')).toBe(true);
++          expect(created.title).toBe('New test issue');
++          done();
++        });
++    });
++
++    it('updates only the provided fields', (done) => {
++      service.getAll().subscribe((issues) => {
++        const target = issues[0];
++        service.update(target.id, { title: 'Updated title only' }).subscribe((updated) => {
++          expect(updated.title).toBe('Updated title only');
++          expect(updated.status).toBe(target.status);
++          expect(updated.priority).toBe(target.priority);
++          done();
++        });
++      });
++    });
++
++    it('deletes an issue', (done) => {
++      service.getAll().subscribe((issuesBefore) => {
++        const target = issuesBefore[0];
++        service.delete(target.id).subscribe(() => {
++          service.getById(target.id).subscribe((found) => {
++            expect(found).toBeUndefined();
++            done();
++          });
++        });
++      });
++    });
++  });
++});
+diff --git a/src/app/core/services/issue.service.ts b/src/app/core/services/issue.service.ts
+index ffb7b87..dec1beb 100644
+--- a/src/app/core/services/issue.service.ts
++++ b/src/app/core/services/issue.service.ts
+@@ -1,7 +1,9 @@
+ import { Injectable } from '@angular/core';
+ import { Observable } from 'rxjs';
+-import { Issue } from '../models';
++import { CreateIssuePayload, Issue, IssueFilters, PaginationResponse, UpdateIssuePayload } from '../models';
+ import { MOCK_ISSUES } from '../mock/issues.mock';
++import { MOCK_PROJECTS } from '../mock/projects.mock';
++import { ALL_LABELS } from '../mock/labels.mock';
+ 
+ const MOCK_LATENCY_MS = 400;
+ 
+@@ -15,10 +17,15 @@ function delayed<T>(factory: () => T): Observable<T> {
+   });
+ }
+ 
++const DEFAULT_PAGE_SIZE = 10;
++
+ /**
+  * Reads/writes issue data. Backed by the mock store for now — swapped for
+- * real HTTP calls in Phase 11. Filtering/sorting/pagination (Phase 6) will
+- * extend this service further.
++ * real HTTP calls in Phase 11. `getFiltered` does search/filter/sort/
++ * pagination client-side against the mock array today, but is shaped
++ * exactly like a paginated REST endpoint (IssueFilters in, PaginationResponse
++ * out) so the frontend is already designed for server-side filtering later —
++ * IssueListComponent never needs to change when that swap happens.
+  */
+ @Injectable({ providedIn: 'root' })
+ export class IssueService {
+@@ -26,6 +33,10 @@ export class IssueService {
+     return delayed(() => [...MOCK_ISSUES]);
+   }
+ 
++  getById(id: string): Observable<Issue | undefined> {
++    return delayed(() => MOCK_ISSUES.find((issue) => issue.id === id));
++  }
++
+   getAssignedTo(userId: string): Observable<Issue[]> {
+     return delayed(() => MOCK_ISSUES.filter((issue) => issue.assigneeId === userId));
+   }
+@@ -33,4 +44,127 @@ export class IssueService {
+   getByProjectId(projectId: string): Observable<Issue[]> {
+     return delayed(() => MOCK_ISSUES.filter((issue) => issue.projectId === projectId));
+   }
++
++  getFiltered(filters: IssueFilters): Observable<PaginationResponse<Issue>> {
++    return delayed(() => {
++      let items = [...MOCK_ISSUES];
++
++      if (filters.search) {
++        const term = filters.search.trim().toLowerCase();
++        items = items.filter(
++          (issue) =>
++            issue.title.toLowerCase().includes(term) || issue.key.toLowerCase().includes(term),
++        );
++      }
++      if (filters.status) {
++        items = items.filter((issue) => issue.status === filters.status);
++      }
++      if (filters.priority) {
++        items = items.filter((issue) => issue.priority === filters.priority);
++      }
++      if (filters.assigneeId) {
++        items = items.filter((issue) => issue.assigneeId === filters.assigneeId);
++      }
++      if (filters.projectId) {
++        items = items.filter((issue) => issue.projectId === filters.projectId);
++      }
++
++      if (filters.sortBy) {
++        const sortBy = filters.sortBy;
++        const direction = filters.sortDirection === 'desc' ? -1 : 1;
++        items = [...items].sort((a, b) => {
++          const aValue = a[sortBy];
++          const bValue = b[sortBy];
++          if (aValue === bValue) return 0;
++          if (aValue === null || aValue === undefined) return 1;
++          if (bValue === null || bValue === undefined) return -1;
++          return aValue < bValue ? -direction : direction;
++        });
++      }
++
++      const totalItems = items.length;
++      const pageSize = filters.pageSize && filters.pageSize > 0 ? filters.pageSize : DEFAULT_PAGE_SIZE;
++      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
++      const page = Math.min(Math.max(1, filters.page ?? 1), totalPages);
++      const start = (page - 1) * pageSize;
++
++      return {
++        items: items.slice(start, start + pageSize),
++        page,
++        pageSize,
++        totalItems,
++        totalPages,
++      };
++    });
++  }
++
++  create(payload: CreateIssuePayload): Observable<Issue> {
++    return delayed(() => {
++      const now = new Date().toISOString().slice(0, 10);
++      const projectIssues = MOCK_ISSUES.filter((i) => i.projectId === payload.projectId);
++      const issue: Issue = {
++        id: `issue-${MOCK_ISSUES.length + 1}`,
++        key: this.nextIssueKey(payload.projectId, projectIssues.length),
++        title: payload.title,
++        description: payload.description,
++        projectId: payload.projectId,
++        status: payload.status,
++        priority: payload.priority,
++        assigneeId: payload.assigneeId,
++        reporterId: 'user-1',
++        labels: ALL_LABELS.filter((label) => payload.labelIds.includes(label.id)),
++        sprintId: payload.sprintId,
++        createdDate: now,
++        updatedDate: now,
++        dueDate: payload.dueDate,
++      };
++      MOCK_ISSUES.push(issue);
++      return issue;
++    });
++  }
++
++  update(id: string, payload: UpdateIssuePayload): Observable<Issue> {
++    return delayed(() => {
++      const index = MOCK_ISSUES.findIndex((issue) => issue.id === id);
++      if (index === -1) {
++        throw new Error('Issue not found.');
++      }
++      const current = MOCK_ISSUES[index];
++      const updated: Issue = {
++        ...current,
++        ...(payload.title !== undefined && { title: payload.title }),
++        ...(payload.description !== undefined && { description: payload.description }),
++        ...(payload.projectId !== undefined && { projectId: payload.projectId }),
++        ...(payload.status !== undefined && { status: payload.status }),
++        ...(payload.priority !== undefined && { priority: payload.priority }),
++        ...(payload.assigneeId !== undefined && { assigneeId: payload.assigneeId }),
++        ...(payload.sprintId !== undefined && { sprintId: payload.sprintId }),
++        ...(payload.dueDate !== undefined && { dueDate: payload.dueDate }),
++        ...(payload.labelIds !== undefined && {
++          labels: ALL_LABELS.filter((label) => payload.labelIds?.includes(label.id)),
++        }),
++        updatedDate: new Date().toISOString().slice(0, 10),
++      };
++      MOCK_ISSUES[index] = updated;
++      return updated;
++    });
++  }
++
++  delete(id: string): Observable<void> {
++    return delayed(() => {
++      const index = MOCK_ISSUES.findIndex((issue) => issue.id === id);
++      if (index !== -1) {
++        MOCK_ISSUES.splice(index, 1);
++      }
++    });
++  }
++
++  private nextIssueKey(projectId: string, existingCountForProject: number): string {
++    // Mirrors real Jira-style keys (PROJECTKEY-N) using the project's own
++    // issue count rather than the global MOCK_ISSUES length, so keys stay
++    // sequential per project instead of jumping around.
++    const project = MOCK_PROJECTS.find((p) => p.id === projectId);
++    const prefix = project?.key ?? 'ISSUE';
++    return `${prefix}-${existingCountForProject + 1}`;
++  }
+ }
+diff --git a/src/app/core/services/user.service.ts b/src/app/core/services/user.service.ts
+new file mode 100644
+index 0000000..f252a7a
+--- /dev/null
++++ b/src/app/core/services/user.service.ts
+@@ -0,0 +1,27 @@
++import { Injectable } from '@angular/core';
++import { Observable } from 'rxjs';
++import { User } from '../models';
++import { MOCK_USERS } from '../mock/users.mock';
++
++const MOCK_LATENCY_MS = 300;
++
++function delayed<T>(factory: () => T): Observable<T> {
++  return new Observable<T>((subscriber) => {
++    const timeout = setTimeout(() => {
++      subscriber.next(factory());
++      subscriber.complete();
++    }, MOCK_LATENCY_MS);
++    return () => clearTimeout(timeout);
++  });
++}
++
++@Injectable({ providedIn: 'root' })
++export class UserService {
++  getAll(): Observable<User[]> {
++    return delayed(() => [...MOCK_USERS]);
++  }
++
++  getById(id: string): Observable<User | undefined> {
++    return delayed(() => MOCK_USERS.find((user) => user.id === id));
++  }
++}
+diff --git a/src/app/features/issues/comments/comments.component.html b/src/app/features/issues/comments/comments.component.html
+new file mode 100644
+index 0000000..2897f2c
+--- /dev/null
++++ b/src/app/features/issues/comments/comments.component.html
+@@ -0,0 +1,57 @@
++<div class="comments">
++  <h2 class="comments__title">Comments</h2>
++
++  @if (loading()) {
++    <app-loading-spinner message="Loading comments..." />
++  } @else {
++    @if (comments().length === 0) {
++      <app-empty-state icon="chat_bubble_outline" message="No comments yet." />
++    } @else {
++      <ul class="comments__list">
++        @for (comment of comments(); track comment.id) {
++          <li class="comments__item">
++            <div class="comments__avatar">{{ comment.userName.charAt(0) }}</div>
++            <div class="comments__body">
++              <div class="comments__meta">
++                <span class="comments__author">{{ comment.userName }}</span>
++                <time class="comments__time">{{ comment.createdDate | relativeTime }}</time>
++                @if (isOwn(comment) && editingCommentId() !== comment.id) {
++                  <button mat-icon-button type="button" (click)="startEdit(comment)" aria-label="Edit comment">
++                    <mat-icon>edit</mat-icon>
++                  </button>
++                  <button mat-icon-button type="button" (click)="deleteComment(comment)" aria-label="Delete comment">
++                    <mat-icon>delete</mat-icon>
++                  </button>
++                }
++              </div>
++
++              @if (editingCommentId() === comment.id) {
++                <form [formGroup]="editForm" (ngSubmit)="saveEdit(comment)" class="comments__edit-form">
++                  <mat-form-field appearance="outline" class="comments__edit-field">
++                    <textarea matInput formControlName="content" rows="2"></textarea>
++                  </mat-form-field>
++                  <div class="comments__edit-actions">
++                    <button mat-button type="button" (click)="cancelEdit()">Cancel</button>
++                    <button mat-flat-button color="primary" type="submit">Save</button>
++                  </div>
++                </form>
++              } @else {
++                <p class="comments__content">{{ comment.content }}</p>
++              }
++            </div>
++          </li>
++        }
++      </ul>
++    }
++
++    <form [formGroup]="form" (ngSubmit)="submit()" class="comments__form">
++      <mat-form-field appearance="outline" class="comments__form-field">
++        <mat-label>Add a comment</mat-label>
++        <textarea matInput formControlName="content" rows="2"></textarea>
++      </mat-form-field>
++      <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
++        {{ submitting() ? 'Posting...' : 'Comment' }}
++      </button>
++    </form>
++  }
++</div>
+diff --git a/src/app/features/issues/comments/comments.component.scss b/src/app/features/issues/comments/comments.component.scss
+new file mode 100644
+index 0000000..2d71b7a
+--- /dev/null
++++ b/src/app/features/issues/comments/comments.component.scss
+@@ -0,0 +1,99 @@
++.comments__title {
++  margin: 0 0 var(--db-space-md);
++  font-size: 1rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.comments__list {
++  list-style: none;
++  margin: 0 0 var(--db-space-lg);
++  padding: 0;
++}
++
++.comments__item {
++  display: flex;
++  gap: var(--db-space-sm);
++  padding: var(--db-space-sm) 0;
++  border-bottom: 1px solid var(--db-color-border);
++
++  &:last-child {
++    border-bottom: none;
++  }
++}
++
++.comments__avatar {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  width: 32px;
++  height: 32px;
++  border-radius: 50%;
++  background: var(--db-color-primary);
++  color: #fff;
++  font-size: 0.8rem;
++  font-weight: 600;
++  flex-shrink: 0;
++}
++
++.comments__body {
++  flex: 1;
++}
++
++.comments__meta {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-sm);
++  margin-bottom: 2px;
++
++  button {
++    width: 28px;
++    height: 28px;
++    line-height: 28px;
++
++    mat-icon {
++      font-size: 16px;
++      width: 16px;
++      height: 16px;
++    }
++  }
++}
++
++.comments__author {
++  font-weight: 600;
++  font-size: 0.85rem;
++  color: var(--db-color-text-primary);
++}
++
++.comments__time {
++  font-size: 0.75rem;
++  color: var(--db-color-text-secondary);
++}
++
++.comments__content {
++  margin: 0;
++  font-size: 0.85rem;
++  color: var(--db-color-text-primary);
++  white-space: pre-wrap;
++}
++
++.comments__edit-field {
++  width: 100%;
++}
++
++.comments__edit-actions {
++  display: flex;
++  justify-content: flex-end;
++  gap: var(--db-space-sm);
++}
++
++.comments__form {
++  display: flex;
++  flex-direction: column;
++  align-items: flex-end;
++  gap: var(--db-space-sm);
++}
++
++.comments__form-field {
++  width: 100%;
++}
+diff --git a/src/app/features/issues/comments/comments.component.ts b/src/app/features/issues/comments/comments.component.ts
+new file mode 100644
+index 0000000..1549085
+--- /dev/null
++++ b/src/app/features/issues/comments/comments.component.ts
+@@ -0,0 +1,122 @@
++import { ChangeDetectionStrategy, Component, Input, inject, signal } from '@angular/core';
++import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { MatFormFieldModule } from '@angular/material/form-field';
++import { MatInputModule } from '@angular/material/input';
++import { CommentService } from '../../../core/services/comment.service';
++import { AuthService } from '../../../core/services/auth.service';
++import { Comment } from '../../../core/models';
++import { RelativeTimePipe } from '../../../shared/pipes/relative-time.pipe';
++import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
++import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
++
++@Component({
++  selector: 'app-comments',
++  standalone: true,
++  imports: [
++    ReactiveFormsModule,
++    MatButtonModule,
++    MatIconModule,
++    MatFormFieldModule,
++    MatInputModule,
++    RelativeTimePipe,
++    LoadingSpinnerComponent,
++    EmptyStateComponent,
++  ],
++  templateUrl: './comments.component.html',
++  styleUrl: './comments.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class CommentsComponent {
++  private readonly fb = inject(FormBuilder);
++  private readonly commentService = inject(CommentService);
++  private readonly authService = inject(AuthService);
++
++  private issueIdValue = '';
++  @Input({ required: true })
++  set issueId(value: string) {
++    this.issueIdValue = value;
++    this.load();
++  }
++  get issueId(): string {
++    return this.issueIdValue;
++  }
++
++  readonly loading = signal(true);
++  readonly submitting = signal(false);
++  readonly comments = signal<Comment[]>([]);
++  readonly editingCommentId = signal<string | null>(null);
++
++  readonly currentUser = this.authService.currentUser;
++
++  readonly form = this.fb.nonNullable.group({
++    content: ['', [Validators.required]],
++  });
++
++  readonly editForm = this.fb.nonNullable.group({
++    content: ['', [Validators.required]],
++  });
++
++  isOwn(comment: Comment): boolean {
++    return comment.userId === this.currentUser()?.id;
++  }
++
++  submit(): void {
++    if (this.form.invalid || this.submitting()) {
++      this.form.markAllAsTouched();
++      return;
++    }
++    const user = this.currentUser();
++    if (!user) {
++      return;
++    }
++    this.submitting.set(true);
++    this.commentService
++      .create(this.issueId, user.id, `${user.firstName} ${user.lastName}`, this.form.controls.content.value)
++      .subscribe({
++        next: (comment) => {
++          this.comments.update((list) => [...list, comment]);
++          this.form.reset({ content: '' });
++          this.submitting.set(false);
++        },
++        error: () => {
++          this.submitting.set(false);
++        },
++      });
++  }
++
++  startEdit(comment: Comment): void {
++    this.editingCommentId.set(comment.id);
++    this.editForm.setValue({ content: comment.content });
++  }
++
++  cancelEdit(): void {
++    this.editingCommentId.set(null);
++  }
++
++  saveEdit(comment: Comment): void {
++    if (this.editForm.invalid) {
++      this.editForm.markAllAsTouched();
++      return;
++    }
++    this.commentService.update(comment.id, this.editForm.controls.content.value).subscribe((updated) => {
++      this.comments.update((list) => list.map((c) => (c.id === updated.id ? updated : c)));
++      this.editingCommentId.set(null);
++    });
++  }
++
++  deleteComment(comment: Comment): void {
++    this.commentService.delete(comment.id).subscribe(() => {
++      this.comments.update((list) => list.filter((c) => c.id !== comment.id));
++    });
++  }
++
++  private load(): void {
++    this.loading.set(true);
++    this.commentService.getByIssueId(this.issueId).subscribe((comments) => {
++      this.comments.set(comments);
++      this.loading.set(false);
++    });
++  }
++}
+diff --git a/src/app/features/issues/issue-detail/issue-detail.component.html b/src/app/features/issues/issue-detail/issue-detail.component.html
+new file mode 100644
+index 0000000..0f9a01a
+--- /dev/null
++++ b/src/app/features/issues/issue-detail/issue-detail.component.html
+@@ -0,0 +1,122 @@
++@if (loading()) {
++  <app-loading-spinner message="Loading issue..." />
++} @else if (error()) {
++  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
++} @else {
++  @if (issue(); as issue) {
++    <div class="issue-detail">
++      <div class="issue-detail__header">
++        <div class="issue-detail__heading">
++          <span class="issue-detail__key">{{ issue.key }}</span>
++          <h1 class="issue-detail__title">{{ issue.title }}</h1>
++        </div>
++        <div class="issue-detail__header-actions">
++          <button mat-stroked-button color="primary" type="button" [routerLink]="['/issues', issue.id, 'edit']">
++            <mat-icon>edit</mat-icon>
++            Edit
++          </button>
++          <button mat-icon-button type="button" (click)="deleteIssue()" aria-label="Delete issue">
++            <mat-icon>delete</mat-icon>
++          </button>
++        </div>
++      </div>
++
++      <div class="issue-detail__layout">
++        <div class="issue-detail__main">
++          <section class="issue-detail__section">
++            <h2 class="issue-detail__section-title">Description</h2>
++            <p class="issue-detail__description">{{ issue.description || 'No description provided.' }}</p>
++          </section>
++
++          <section class="issue-detail__section">
++            <app-comments [issueId]="issue.id" />
++          </section>
++
++          <section class="issue-detail__section">
++            <h2 class="issue-detail__section-title">Activity</h2>
++            @if (issueActivity().length === 0) {
++              <p class="issue-detail__empty-activity">No activity recorded for this issue yet.</p>
++            } @else {
++              <app-activity-timeline [activities]="issueActivity()" />
++            }
++          </section>
++        </div>
++
++        <aside class="issue-detail__sidebar">
++          <div class="issue-detail__field">
++            <span class="issue-detail__field-label">Status</span>
++            <button mat-stroked-button type="button" [matMenuTriggerFor]="statusMenu" class="issue-detail__field-trigger">
++              <app-status-badge [status]="issue.status" />
++              <mat-icon>arrow_drop_down</mat-icon>
++            </button>
++            <mat-menu #statusMenu="matMenu">
++              @for (status of statusOptions; track status) {
++                <button mat-menu-item type="button" (click)="changeStatus(status)">{{ status }}</button>
++              }
++            </mat-menu>
++          </div>
++
++          <div class="issue-detail__field">
++            <span class="issue-detail__field-label">Priority</span>
++            <button mat-stroked-button type="button" [matMenuTriggerFor]="priorityMenu" class="issue-detail__field-trigger">
++              <app-priority-badge [priority]="issue.priority" />
++              <mat-icon>arrow_drop_down</mat-icon>
++            </button>
++            <mat-menu #priorityMenu="matMenu">
++              @for (priority of priorityOptions; track priority) {
++                <button mat-menu-item type="button" (click)="changePriority(priority)">{{ priority }}</button>
++              }
++            </mat-menu>
++          </div>
++
++          <div class="issue-detail__field">
++            <span class="issue-detail__field-label">Assignee</span>
++            <button mat-stroked-button type="button" [matMenuTriggerFor]="assigneeMenu" class="issue-detail__field-trigger">
++              {{ assigneeName() }}
++              <mat-icon>arrow_drop_down</mat-icon>
++            </button>
++            <mat-menu #assigneeMenu="matMenu">
++              <button mat-menu-item type="button" (click)="assignTo(null)">Unassigned</button>
++              @for (user of users(); track user.id) {
++                <button mat-menu-item type="button" (click)="assignTo(user.id)">
++                  {{ user.firstName }} {{ user.lastName }}
++                </button>
++              }
++            </mat-menu>
++          </div>
++
++          <div class="issue-detail__field">
++            <span class="issue-detail__field-label">Reporter</span>
++            <span class="issue-detail__field-value">{{ reporterName() }}</span>
++          </div>
++
++          <div class="issue-detail__field">
++            <span class="issue-detail__field-label">Created</span>
++            <span class="issue-detail__field-value">{{ issue.createdDate }}</span>
++          </div>
++
++          <div class="issue-detail__field">
++            <span class="issue-detail__field-label">Updated</span>
++            <span class="issue-detail__field-value">{{ issue.updatedDate }}</span>
++          </div>
++
++          <div class="issue-detail__field">
++            <span class="issue-detail__field-label">Due Date</span>
++            <span class="issue-detail__field-value">{{ issue.dueDate ?? 'None' }}</span>
++          </div>
++
++          @if (issue.labels.length > 0) {
++            <div class="issue-detail__field">
++              <span class="issue-detail__field-label">Labels</span>
++              <div class="issue-detail__labels">
++                @for (label of issue.labels; track label.id) {
++                  <span class="issue-detail__label-chip" [style.background]="label.color">{{ label.name }}</span>
++                }
++              </div>
++            </div>
++          }
++        </aside>
++      </div>
++    </div>
++  }
++}
+diff --git a/src/app/features/issues/issue-detail/issue-detail.component.scss b/src/app/features/issues/issue-detail/issue-detail.component.scss
+new file mode 100644
+index 0000000..22bb7f8
+--- /dev/null
++++ b/src/app/features/issues/issue-detail/issue-detail.component.scss
+@@ -0,0 +1,125 @@
++.issue-detail__header {
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: var(--db-space-md);
++  margin-bottom: var(--db-space-lg);
++  flex-wrap: wrap;
++}
++
++.issue-detail__heading {
++  display: flex;
++  flex-direction: column;
++  gap: 2px;
++}
++
++.issue-detail__key {
++  font-size: 0.8rem;
++  font-weight: 700;
++  color: var(--db-color-text-secondary);
++  letter-spacing: 0.04em;
++}
++
++.issue-detail__title {
++  margin: 0;
++  font-size: 1.3rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.issue-detail__header-actions {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-sm);
++}
++
++.issue-detail__layout {
++  display: grid;
++  grid-template-columns: 1fr 280px;
++  gap: var(--db-space-lg);
++
++  @media (max-width: 900px) {
++    grid-template-columns: 1fr;
++  }
++}
++
++.issue-detail__section {
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  padding: var(--db-space-lg);
++  box-shadow: var(--db-shadow-sm);
++  margin-bottom: var(--db-space-md);
++}
++
++.issue-detail__section-title {
++  margin: 0 0 var(--db-space-sm);
++  font-size: 0.95rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.issue-detail__description {
++  margin: 0;
++  font-size: 0.9rem;
++  color: var(--db-color-text-secondary);
++  white-space: pre-wrap;
++}
++
++.issue-detail__empty-activity {
++  margin: 0;
++  font-size: 0.85rem;
++  color: var(--db-color-text-secondary);
++}
++
++.issue-detail__sidebar {
++  display: flex;
++  flex-direction: column;
++  gap: var(--db-space-md);
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  padding: var(--db-space-lg);
++  box-shadow: var(--db-shadow-sm);
++  height: fit-content;
++}
++
++.issue-detail__field {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++}
++
++.issue-detail__field-label {
++  font-size: 0.72rem;
++  font-weight: 600;
++  text-transform: uppercase;
++  letter-spacing: 0.03em;
++  color: var(--db-color-text-secondary);
++}
++
++.issue-detail__field-value {
++  font-size: 0.85rem;
++  color: var(--db-color-text-primary);
++}
++
++.issue-detail__field-trigger {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  width: 100%;
++}
++
++.issue-detail__labels {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 4px;
++}
++
++.issue-detail__label-chip {
++  display: inline-flex;
++  padding: 2px 8px;
++  border-radius: 999px;
++  font-size: 0.72rem;
++  color: #fff;
++}
+diff --git a/src/app/features/issues/issue-detail/issue-detail.component.ts b/src/app/features/issues/issue-detail/issue-detail.component.ts
+index 85707be..144c381 100644
+--- a/src/app/features/issues/issue-detail/issue-detail.component.ts
++++ b/src/app/features/issues/issue-detail/issue-detail.component.ts
+@@ -1,9 +1,166 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
++import { ActivatedRoute, Router, RouterLink } from '@angular/router';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { MatMenuModule } from '@angular/material/menu';
++import { MatDialog } from '@angular/material/dialog';
++import { MatSnackBar } from '@angular/material/snack-bar';
++import { IssuePriority, IssueStatus } from '../../../core/enums';
++import { IssueService } from '../../../core/services/issue.service';
++import { UserService } from '../../../core/services/user.service';
++import { DashboardService } from '../../../core/services/dashboard.service';
++import { Activity, Issue, User } from '../../../core/models';
++import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
++import { PriorityBadgeComponent } from '../../../shared/components/priority-badge/priority-badge.component';
++import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
++import { ErrorStateComponent } from '../../../shared/components/error-state/error-state.component';
++import { ActivityTimelineComponent } from '../../../shared/components/activity-timeline/activity-timeline.component';
++import {
++  ConfirmDialogComponent,
++  ConfirmDialogData,
++} from '../../../shared/components/confirm-dialog/confirm-dialog.component';
++import { CommentsComponent } from '../comments/comments.component';
++
++const STATUS_OPTIONS = Object.values(IssueStatus);
++const PRIORITY_OPTIONS = Object.values(IssuePriority);
+ 
+ @Component({
+   selector: 'app-issue-detail',
+   standalone: true,
+-  template: `<p>Issue details, comments and activity land here in Phase 6.</p>`,
++  imports: [
++    RouterLink,
++    MatButtonModule,
++    MatIconModule,
++    MatMenuModule,
++    StatusBadgeComponent,
++    PriorityBadgeComponent,
++    LoadingSpinnerComponent,
++    ErrorStateComponent,
++    ActivityTimelineComponent,
++    CommentsComponent,
++  ],
++  templateUrl: './issue-detail.component.html',
++  styleUrl: './issue-detail.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class IssueDetailComponent {}
++export class IssueDetailComponent {
++  private readonly issueService = inject(IssueService);
++  private readonly userService = inject(UserService);
++  private readonly dashboardService = inject(DashboardService);
++  private readonly dialog = inject(MatDialog);
++  private readonly snackBar = inject(MatSnackBar);
++  private readonly router = inject(Router);
++  private readonly activatedRoute = inject(ActivatedRoute);
++
++  private readonly issueId = this.activatedRoute.snapshot.paramMap.get('id') ?? '';
++
++  readonly statusOptions = STATUS_OPTIONS;
++  readonly priorityOptions = PRIORITY_OPTIONS;
++
++  readonly loading = signal(true);
++  readonly error = signal<string | null>(null);
++  readonly issue = signal<Issue | null>(null);
++  readonly users = signal<User[]>([]);
++
++  private readonly allActivity = signal<Activity[]>([]);
++  readonly issueActivity = computed(() =>
++    this.allActivity().filter((activity) => activity.entityId === this.issueId),
++  );
++
++  readonly assigneeName = computed(() => this.userName(this.issue()?.assigneeId ?? null));
++  readonly reporterName = computed(() => this.userName(this.issue()?.reporterId ?? null));
++
++  constructor() {
++    this.userService.getAll().subscribe((users) => this.users.set(users));
++    this.load();
++  }
++
++  retry(): void {
++    this.load();
++  }
++
++  changeStatus(status: IssueStatus): void {
++    this.updateIssue({ status });
++  }
++
++  changePriority(priority: IssuePriority): void {
++    this.updateIssue({ priority });
++  }
++
++  assignTo(userId: string | null): void {
++    this.updateIssue({ assigneeId: userId });
++  }
++
++  deleteIssue(): void {
++    const issue = this.issue();
++    if (!issue) {
++      return;
++    }
++    const data: ConfirmDialogData = {
++      title: 'Delete issue?',
++      message: `"${issue.key} — ${issue.title}" will be permanently deleted. This can't be undone.`,
++      confirmLabel: 'Delete',
++      danger: true,
++    };
++    this.dialog
++      .open(ConfirmDialogComponent, { data })
++      .afterClosed()
++      .subscribe((confirmed) => {
++        if (!confirmed) {
++          return;
++        }
++        this.issueService.delete(issue.id).subscribe(() => {
++          this.snackBar.open(`${issue.key} deleted.`, undefined, { duration: 3000 });
++          this.router.navigateByUrl('/issues');
++        });
++      });
++  }
++
++  private updateIssue(patch: Partial<Issue>): void {
++    const issue = this.issue();
++    if (!issue) {
++      return;
++    }
++    this.issueService.update(issue.id, patch).subscribe({
++      next: (updated) => {
++        this.issue.set(updated);
++        this.snackBar.open('Issue updated.', undefined, { duration: 2000 });
++      },
++      error: () => {
++        this.snackBar.open('Unable to update issue.', undefined, { duration: 3000 });
++      },
++    });
++  }
++
++  private userName(userId: string | null): string {
++    if (!userId) {
++      return 'Unassigned';
++    }
++    const user = this.users().find((u) => u.id === userId);
++    return user ? `${user.firstName} ${user.lastName}` : 'Unknown';
++  }
++
++  private load(): void {
++    this.loading.set(true);
++    this.error.set(null);
++    this.issueService.getById(this.issueId).subscribe({
++      next: (issue) => {
++        if (!issue) {
++          this.error.set("We couldn't find this issue.");
++          this.loading.set(false);
++          return;
++        }
++        this.issue.set(issue);
++        this.loading.set(false);
++      },
++      error: () => {
++        this.error.set("We couldn't load this issue.");
++        this.loading.set(false);
++      },
++    });
++
++    this.dashboardService.getRecentActivity(50).subscribe((activity) => {
++      this.allActivity.set(activity);
++    });
++  }
++}
+diff --git a/src/app/features/issues/issue-form/issue-form.component.html b/src/app/features/issues/issue-form/issue-form.component.html
+new file mode 100644
+index 0000000..ca95410
+--- /dev/null
++++ b/src/app/features/issues/issue-form/issue-form.component.html
+@@ -0,0 +1,96 @@
++<app-page-header [title]="isEditMode ? 'Edit Issue' : 'New Issue'" />
++
++@if (loadingExisting()) {
++  <app-loading-spinner message="Loading issue..." />
++} @else {
++  <form [formGroup]="form" (ngSubmit)="submit()" class="issue-form" novalidate>
++    <mat-form-field appearance="outline" class="issue-form__field">
++      <mat-label>Title</mat-label>
++      <input matInput formControlName="title" required />
++    </mat-form-field>
++    <app-form-error [control]="form.controls.title" label="Title" />
++
++    <mat-form-field appearance="outline" class="issue-form__field">
++      <mat-label>Description</mat-label>
++      <textarea matInput formControlName="description" rows="4"></textarea>
++    </mat-form-field>
++
++    <div class="issue-form__row">
++      <div>
++        <mat-form-field appearance="outline" class="issue-form__field">
++          <mat-label>Project</mat-label>
++          <mat-select formControlName="projectId" required>
++            @for (project of projects(); track project.id) {
++              <mat-option [value]="project.id">{{ project.name }}</mat-option>
++            }
++          </mat-select>
++        </mat-form-field>
++        <app-form-error [control]="form.controls.projectId" label="Project" />
++      </div>
++
++      <div>
++        <mat-form-field appearance="outline" class="issue-form__field">
++          <mat-label>Assignee</mat-label>
++          <mat-select formControlName="assigneeId">
++            <mat-option [value]="null">Unassigned</mat-option>
++            @for (user of users(); track user.id) {
++              <mat-option [value]="user.id">{{ user.firstName }} {{ user.lastName }}</mat-option>
++            }
++          </mat-select>
++        </mat-form-field>
++      </div>
++    </div>
++
++    <div class="issue-form__row">
++      <mat-form-field appearance="outline" class="issue-form__field">
++        <mat-label>Status</mat-label>
++        <mat-select formControlName="status" required>
++          @for (status of statusOptions; track status) {
++            <mat-option [value]="status">{{ status }}</mat-option>
++          }
++        </mat-select>
++      </mat-form-field>
++
++      <mat-form-field appearance="outline" class="issue-form__field">
++        <mat-label>Priority</mat-label>
++        <mat-select formControlName="priority" required>
++          @for (priority of priorityOptions; track priority) {
++            <mat-option [value]="priority">{{ priority }}</mat-option>
++          }
++        </mat-select>
++      </mat-form-field>
++    </div>
++
++    <mat-form-field appearance="outline" class="issue-form__field">
++      <mat-label>Due Date</mat-label>
++      <input matInput [matDatepicker]="dueDatePicker" formControlName="dueDate" />
++      <mat-datepicker-toggle matIconSuffix [for]="dueDatePicker" />
++      <mat-datepicker #dueDatePicker />
++    </mat-form-field>
++
++    <div class="issue-form__labels">
++      <span class="issue-form__labels-title">Labels</span>
++      <mat-chip-listbox multiple aria-label="Labels">
++        @for (label of allLabels; track label.id) {
++          <mat-chip-option
++            [selected]="form.controls.labelIds.value.includes(label.id)"
++            (click)="toggleLabel(label.id)"
++          >
++            {{ label.name }}
++          </mat-chip-option>
++        }
++      </mat-chip-listbox>
++    </div>
++
++    @if (errorMessage()) {
++      <div class="issue-form__error" role="alert">{{ errorMessage() }}</div>
++    }
++
++    <div class="issue-form__actions">
++      <button mat-button type="button" routerLink="/issues">Cancel</button>
++      <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
++        {{ submitting() ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Issue' }}
++      </button>
++    </div>
++  </form>
++}
+diff --git a/src/app/features/issues/issue-form/issue-form.component.scss b/src/app/features/issues/issue-form/issue-form.component.scss
+new file mode 100644
+index 0000000..70a7870
+--- /dev/null
++++ b/src/app/features/issues/issue-form/issue-form.component.scss
+@@ -0,0 +1,42 @@
++.issue-form {
++  max-width: 640px;
++  display: flex;
++  flex-direction: column;
++}
++
++.issue-form__field {
++  width: 100%;
++}
++
++.issue-form__row {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: var(--db-space-md);
++}
++
++.issue-form__labels {
++  margin-bottom: var(--db-space-md);
++}
++
++.issue-form__labels-title {
++  display: block;
++  font-size: 0.8rem;
++  color: var(--db-color-text-secondary);
++  margin-bottom: var(--db-space-xs);
++}
++
++.issue-form__error {
++  background: color-mix(in srgb, var(--db-color-danger) 10%, transparent);
++  color: var(--db-color-danger);
++  border-radius: var(--db-radius-sm);
++  padding: var(--db-space-sm) var(--db-space-md);
++  font-size: 0.85rem;
++  margin-bottom: var(--db-space-md);
++}
++
++.issue-form__actions {
++  display: flex;
++  justify-content: flex-end;
++  gap: var(--db-space-sm);
++  margin-top: var(--db-space-sm);
++}
+diff --git a/src/app/features/issues/issue-form/issue-form.component.ts b/src/app/features/issues/issue-form/issue-form.component.ts
+index 76d7852..6587f03 100644
+--- a/src/app/features/issues/issue-form/issue-form.component.ts
++++ b/src/app/features/issues/issue-form/issue-form.component.ts
+@@ -1,9 +1,161 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
++import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
++import { ActivatedRoute, Router, RouterLink } from '@angular/router';
++import { MatFormFieldModule } from '@angular/material/form-field';
++import { MatInputModule } from '@angular/material/input';
++import { MatSelectModule } from '@angular/material/select';
++import { MatButtonModule } from '@angular/material/button';
++import { MatDatepickerModule } from '@angular/material/datepicker';
++import { MatNativeDateModule } from '@angular/material/core';
++import { MatChipsModule } from '@angular/material/chips';
++import { IssuePriority, IssueStatus } from '../../../core/enums';
++import { IssueService } from '../../../core/services/issue.service';
++import { ProjectService } from '../../../core/services/project.service';
++import { UserService } from '../../../core/services/user.service';
++import { Project, User } from '../../../core/models';
++import { ALL_LABELS } from '../../../core/mock/labels.mock';
++import { FormErrorComponent } from '../../../shared/components/form-error/form-error.component';
++import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
++import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
++
++const STATUS_OPTIONS = Object.values(IssueStatus);
++const PRIORITY_OPTIONS = Object.values(IssuePriority);
+ 
+ @Component({
+   selector: 'app-issue-form',
+   standalone: true,
+-  template: `<p>Create/edit issue form lands here in Phase 6.</p>`,
++  imports: [
++    ReactiveFormsModule,
++    RouterLink,
++    MatFormFieldModule,
++    MatInputModule,
++    MatSelectModule,
++    MatButtonModule,
++    MatDatepickerModule,
++    MatNativeDateModule,
++    MatChipsModule,
++    FormErrorComponent,
++    PageHeaderComponent,
++    LoadingSpinnerComponent,
++  ],
++  templateUrl: './issue-form.component.html',
++  styleUrl: './issue-form.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class IssueFormComponent {}
++export class IssueFormComponent {
++  private readonly fb = inject(FormBuilder);
++  private readonly issueService = inject(IssueService);
++  private readonly projectService = inject(ProjectService);
++  private readonly userService = inject(UserService);
++  private readonly router = inject(Router);
++  private readonly activatedRoute = inject(ActivatedRoute);
++
++  readonly statusOptions = STATUS_OPTIONS;
++  readonly priorityOptions = PRIORITY_OPTIONS;
++  readonly allLabels = ALL_LABELS;
++
++  readonly projects = signal<Project[]>([]);
++  readonly users = signal<User[]>([]);
++
++  private readonly issueId = this.activatedRoute.snapshot.paramMap.get('id');
++  readonly isEditMode = this.issueId !== null;
++
++  readonly loadingExisting = signal(this.isEditMode);
++  readonly submitting = signal(false);
++  readonly errorMessage = signal<string | null>(null);
++
++  readonly form = this.fb.nonNullable.group({
++    title: ['', [Validators.required]],
++    description: ['', []],
++    projectId: ['', [Validators.required]],
++    status: [IssueStatus.Backlog, [Validators.required]],
++    priority: [IssuePriority.Medium, [Validators.required]],
++    assigneeId: [null as string | null],
++    labelIds: [[] as string[]],
++    dueDate: [null as Date | null],
++  });
++
++  constructor() {
++    this.projectService.getAll().subscribe((projects) => this.projects.set(projects));
++    this.userService.getAll().subscribe((users) => this.users.set(users));
++
++    const preselectedProjectId = this.activatedRoute.snapshot.queryParamMap.get('projectId');
++    if (preselectedProjectId && !this.isEditMode) {
++      this.form.patchValue({ projectId: preselectedProjectId });
++    }
++
++    if (this.isEditMode && this.issueId) {
++      this.issueService.getById(this.issueId).subscribe({
++        next: (issue) => {
++          if (!issue) {
++            this.errorMessage.set('Issue not found.');
++            this.loadingExisting.set(false);
++            return;
++          }
++          this.form.patchValue({
++            title: issue.title,
++            description: issue.description,
++            projectId: issue.projectId,
++            status: issue.status,
++            priority: issue.priority,
++            assigneeId: issue.assigneeId,
++            labelIds: issue.labels.map((l) => l.id),
++            dueDate: issue.dueDate ? new Date(issue.dueDate) : null,
++          });
++          this.loadingExisting.set(false);
++        },
++        error: () => {
++          this.errorMessage.set("We couldn't load this issue.");
++          this.loadingExisting.set(false);
++        },
++      });
++    }
++  }
++
++  toggleLabel(labelId: string): void {
++    const current = this.form.controls.labelIds.value;
++    const next = current.includes(labelId)
++      ? current.filter((id) => id !== labelId)
++      : [...current, labelId];
++    this.form.controls.labelIds.setValue(next);
++  }
++
++  submit(): void {
++    if (this.form.invalid || this.submitting()) {
++      this.form.markAllAsTouched();
++      return;
++    }
++
++    this.submitting.set(true);
++    this.errorMessage.set(null);
++
++    const raw = this.form.getRawValue();
++    const payload = {
++      title: raw.title,
++      description: raw.description,
++      projectId: raw.projectId,
++      status: raw.status,
++      priority: raw.priority,
++      assigneeId: raw.assigneeId,
++      labelIds: raw.labelIds,
++      sprintId: null,
++      dueDate: raw.dueDate ? raw.dueDate.toISOString().slice(0, 10) : null,
++    };
++
++    const request =
++      this.isEditMode && this.issueId
++        ? this.issueService.update(this.issueId, payload)
++        : this.issueService.create(payload);
++
++    request.subscribe({
++      next: (issue) => {
++        this.submitting.set(false);
++        this.router.navigate(['/issues', issue.id]);
++      },
++      error: () => {
++        this.submitting.set(false);
++        this.errorMessage.set('Unable to save this issue. Please try again.');
++      },
++    });
++  }
++}
+diff --git a/src/app/features/issues/issue-list/issue-list.component.html b/src/app/features/issues/issue-list/issue-list.component.html
+new file mode 100644
+index 0000000..b60a90e
+--- /dev/null
++++ b/src/app/features/issues/issue-list/issue-list.component.html
+@@ -0,0 +1,120 @@
++<app-page-header title="Issues" subtitle="All issues across your projects.">
++  <button mat-flat-button color="primary" type="button" routerLink="/issues/new">
++    <mat-icon>add</mat-icon>
++    New Issue
++  </button>
++</app-page-header>
++
++<div class="issue-list__filters">
++  <app-search-input
++    placeholder="Search by title or key..."
++    [value]="filters().search ?? ''"
++    [loading]="loading()"
++    (searchChange)="onSearch($event)"
++  />
++
++  <mat-form-field appearance="outline" class="issue-list__filter-field">
++    <mat-label>Status</mat-label>
++    <mat-select [value]="filters().status" (selectionChange)="onStatusChange($event.value)">
++      <mat-option [value]="null">All</mat-option>
++      @for (status of statusOptions; track status) {
++        <mat-option [value]="status">{{ status }}</mat-option>
++      }
++    </mat-select>
++  </mat-form-field>
++
++  <mat-form-field appearance="outline" class="issue-list__filter-field">
++    <mat-label>Priority</mat-label>
++    <mat-select [value]="filters().priority" (selectionChange)="onPriorityChange($event.value)">
++      <mat-option [value]="null">All</mat-option>
++      @for (priority of priorityOptions; track priority) {
++        <mat-option [value]="priority">{{ priority }}</mat-option>
++      }
++    </mat-select>
++  </mat-form-field>
++
++  <mat-form-field appearance="outline" class="issue-list__filter-field">
++    <mat-label>Assignee</mat-label>
++    <mat-select [value]="filters().assigneeId" (selectionChange)="onAssigneeChange($event.value)">
++      <mat-option [value]="null">All</mat-option>
++      @for (user of users(); track user.id) {
++        <mat-option [value]="user.id">{{ user.firstName }} {{ user.lastName }}</mat-option>
++      }
++    </mat-select>
++  </mat-form-field>
++
++  <mat-form-field appearance="outline" class="issue-list__filter-field">
++    <mat-label>Project</mat-label>
++    <mat-select [value]="filters().projectId" (selectionChange)="onProjectChange($event.value)">
++      <mat-option [value]="null">All</mat-option>
++      @for (project of projects(); track project.id) {
++        <mat-option [value]="project.id">{{ project.name }}</mat-option>
++      }
++    </mat-select>
++  </mat-form-field>
++
++  <button mat-button type="button" (click)="clearFilters()">
++    <mat-icon>filter_alt_off</mat-icon>
++    Clear
++  </button>
++</div>
++
++@if (loading() && issues().length === 0) {
++  <app-loading-spinner message="Loading issues..." />
++} @else if (error()) {
++  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
++} @else if (issues().length === 0) {
++  <app-empty-state icon="task_alt" message="No issues found." hint="Try changing your filters." />
++} @else {
++  <div class="issue-table" role="table">
++    <div class="issue-table__row issue-table__row--header" role="row">
++      <span>Key</span>
++      <span>Title</span>
++      <button class="issue-table__sort" type="button" (click)="onSort('status')">
++        Status
++        @if (filters().sortBy === 'status') {
++          <mat-icon>{{ filters().sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
++        }
++      </button>
++      <button class="issue-table__sort" type="button" (click)="onSort('priority')">
++        Priority
++        @if (filters().sortBy === 'priority') {
++          <mat-icon>{{ filters().sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
++        }
++      </button>
++      <span>Assignee</span>
++      <button class="issue-table__sort" type="button" (click)="onSort('createdDate')">
++        Created
++        @if (filters().sortBy === 'createdDate') {
++          <mat-icon>{{ filters().sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
++        }
++      </button>
++      <button class="issue-table__sort" type="button" (click)="onSort('dueDate')">
++        Due
++        @if (filters().sortBy === 'dueDate') {
++          <mat-icon>{{ filters().sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
++        }
++      </button>
++    </div>
++
++    @for (issue of issues(); track issue.id) {
++      <a class="issue-table__row" role="row" [routerLink]="['/issues', issue.id]">
++        <span class="issue-table__key">{{ issue.key }}</span>
++        <span class="issue-table__title">{{ issue.title }}</span>
++        <app-status-badge [status]="issue.status" />
++        <app-priority-badge [priority]="issue.priority" />
++        <span class="issue-table__assignee">{{ assigneeName(issue) }}</span>
++        <span class="issue-table__date">{{ issue.createdDate }}</span>
++        <span class="issue-table__date">{{ issue.dueDate ?? '—' }}</span>
++      </a>
++    }
++  </div>
++
++  <app-pagination
++    [page]="filters().page ?? 1"
++    [totalPages]="totalPages()"
++    [totalItems]="totalItems()"
++    [pageSize]="filters().pageSize ?? 10"
++    (pageChange)="onPageChange($event)"
++  />
++}
+diff --git a/src/app/features/issues/issue-list/issue-list.component.scss b/src/app/features/issues/issue-list/issue-list.component.scss
+new file mode 100644
+index 0000000..92bfffc
+--- /dev/null
++++ b/src/app/features/issues/issue-list/issue-list.component.scss
+@@ -0,0 +1,96 @@
++.issue-list__filters {
++  display: flex;
++  align-items: flex-start;
++  gap: var(--db-space-sm);
++  margin-bottom: var(--db-space-md);
++  flex-wrap: wrap;
++
++  app-search-input {
++    flex: 1 1 240px;
++    min-width: 200px;
++  }
++}
++
++.issue-list__filter-field {
++  width: 160px;
++}
++
++.issue-table {
++  display: flex;
++  flex-direction: column;
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  overflow: hidden;
++}
++
++.issue-table__row {
++  display: grid;
++  grid-template-columns: 80px 2fr 120px 110px 140px 100px 100px;
++  align-items: center;
++  gap: var(--db-space-sm);
++  padding: var(--db-space-sm) var(--db-space-md);
++  border-bottom: 1px solid var(--db-color-border);
++  text-decoration: none;
++  color: inherit;
++  font-size: 0.85rem;
++
++  &:last-child {
++    border-bottom: none;
++  }
++
++  &:hover:not(&--header) {
++    background: var(--db-color-surface-alt);
++  }
++}
++
++.issue-table__row--header {
++  background: var(--db-color-surface-alt);
++  font-size: 0.72rem;
++  font-weight: 600;
++  text-transform: uppercase;
++  letter-spacing: 0.03em;
++  color: var(--db-color-text-secondary);
++}
++
++.issue-table__sort {
++  display: flex;
++  align-items: center;
++  gap: 2px;
++  background: none;
++  border: none;
++  padding: 0;
++  font: inherit;
++  font-weight: 600;
++  text-transform: uppercase;
++  letter-spacing: 0.03em;
++  color: var(--db-color-text-secondary);
++  cursor: pointer;
++  text-align: left;
++
++  mat-icon {
++    font-size: 14px;
++    width: 14px;
++    height: 14px;
++  }
++}
++
++.issue-table__key {
++  font-weight: 600;
++  color: var(--db-color-text-secondary);
++}
++
++.issue-table__title {
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++  color: var(--db-color-text-primary);
++}
++
++.issue-table__assignee,
++.issue-table__date {
++  color: var(--db-color-text-secondary);
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
+diff --git a/src/app/features/issues/issue-list/issue-list.component.ts b/src/app/features/issues/issue-list/issue-list.component.ts
+index b575cea..89135cd 100644
+--- a/src/app/features/issues/issue-list/issue-list.component.ts
++++ b/src/app/features/issues/issue-list/issue-list.component.ts
+@@ -1,9 +1,178 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
++import { Router, RouterLink, ActivatedRoute } from '@angular/router';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { MatFormFieldModule } from '@angular/material/form-field';
++import { MatSelectModule } from '@angular/material/select';
++import { IssueStatus, IssuePriority } from '../../../core/enums';
++import { IssueService } from '../../../core/services/issue.service';
++import { ProjectService } from '../../../core/services/project.service';
++import { UserService } from '../../../core/services/user.service';
++import { Issue, IssueFilters, Project, User } from '../../../core/models';
++import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
++import { SearchInputComponent } from '../../../shared/components/search-input/search-input.component';
++import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
++import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
++import { PriorityBadgeComponent } from '../../../shared/components/priority-badge/priority-badge.component';
++import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
++import { ErrorStateComponent } from '../../../shared/components/error-state/error-state.component';
++import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
++
++type SortableColumn = 'createdDate' | 'priority' | 'status' | 'dueDate';
++
++const STATUS_OPTIONS = Object.values(IssueStatus);
++const PRIORITY_OPTIONS = Object.values(IssuePriority);
+ 
+ @Component({
+   selector: 'app-issue-list',
+   standalone: true,
+-  template: `<p>Issue list (search, filter, sort, paginate) lands here in Phase 6.</p>`,
++  imports: [
++    RouterLink,
++    MatButtonModule,
++    MatIconModule,
++    MatFormFieldModule,
++    MatSelectModule,
++    PageHeaderComponent,
++    SearchInputComponent,
++    PaginationComponent,
++    StatusBadgeComponent,
++    PriorityBadgeComponent,
++    LoadingSpinnerComponent,
++    ErrorStateComponent,
++    EmptyStateComponent,
++  ],
++  templateUrl: './issue-list.component.html',
++  styleUrl: './issue-list.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class IssueListComponent {}
++export class IssueListComponent {
++  private readonly issueService = inject(IssueService);
++  private readonly projectService = inject(ProjectService);
++  private readonly userService = inject(UserService);
++  private readonly router = inject(Router);
++  private readonly activatedRoute = inject(ActivatedRoute);
++
++  readonly statusOptions = STATUS_OPTIONS;
++  readonly priorityOptions = PRIORITY_OPTIONS;
++
++  readonly loading = signal(true);
++  readonly error = signal<string | null>(null);
++  readonly issues = signal<Issue[]>([]);
++  readonly totalItems = signal(0);
++  readonly totalPages = signal(1);
++
++  readonly projects = signal<Project[]>([]);
++  readonly users = signal<User[]>([]);
++
++  readonly filters = signal<IssueFilters>(this.readFiltersFromUrl());
++
++  constructor() {
++    this.projectService.getAll().subscribe((projects) => this.projects.set(projects));
++    this.userService.getAll().subscribe((users) => this.users.set(users));
++    this.load();
++  }
++
++  retry(): void {
++    this.load();
++  }
++
++  onSearch(search: string): void {
++    this.updateFilters({ search: search || undefined, page: 1 });
++  }
++
++  onStatusChange(status: IssueStatus | null): void {
++    this.updateFilters({ status, page: 1 });
++  }
++
++  onPriorityChange(priority: IssuePriority | null): void {
++    this.updateFilters({ priority, page: 1 });
++  }
++
++  onAssigneeChange(assigneeId: string | null): void {
++    this.updateFilters({ assigneeId, page: 1 });
++  }
++
++  onProjectChange(projectId: string | null): void {
++    this.updateFilters({ projectId, page: 1 });
++  }
++
++  onSort(column: SortableColumn): void {
++    const current = this.filters();
++    const direction =
++      current.sortBy === column && current.sortDirection === 'asc' ? 'desc' : 'asc';
++    this.updateFilters({ sortBy: column, sortDirection: direction });
++  }
++
++  onPageChange(page: number): void {
++    this.updateFilters({ page });
++  }
++
++  assigneeName(issue: Issue): string {
++    if (!issue.assigneeId) {
++      return 'Unassigned';
++    }
++    const user = this.users().find((u) => u.id === issue.assigneeId);
++    return user ? `${user.firstName} ${user.lastName}` : 'Unassigned';
++  }
++
++  clearFilters(): void {
++    this.filters.set({ page: 1, pageSize: 10 });
++    this.syncUrlAndLoad();
++  }
++
++  private updateFilters(patch: Partial<IssueFilters>): void {
++    this.filters.update((current) => ({ ...current, ...patch }));
++    this.syncUrlAndLoad();
++  }
++
++  private syncUrlAndLoad(): void {
++    const filters = this.filters();
++    this.router.navigate([], {
++      relativeTo: this.activatedRoute,
++      queryParams: {
++        search: filters.search || null,
++        status: filters.status || null,
++        priority: filters.priority || null,
++        assigneeId: filters.assigneeId || null,
++        projectId: filters.projectId || null,
++        page: filters.page && filters.page > 1 ? filters.page : null,
++        sortBy: filters.sortBy || null,
++        sortDirection: filters.sortBy ? filters.sortDirection : null,
++      },
++      queryParamsHandling: '',
++    });
++    this.load();
++  }
++
++  private load(): void {
++    this.loading.set(true);
++    this.error.set(null);
++    this.issueService.getFiltered(this.filters()).subscribe({
++      next: (result) => {
++        this.issues.set(result.items);
++        this.totalItems.set(result.totalItems);
++        this.totalPages.set(result.totalPages);
++        this.loading.set(false);
++      },
++      error: () => {
++        this.error.set("We couldn't load your issues.");
++        this.loading.set(false);
++      },
++    });
++  }
++
++  private readFiltersFromUrl(): IssueFilters {
++    const params = this.activatedRoute.snapshot.queryParamMap;
++    return {
++      search: params.get('search') ?? undefined,
++      status: (params.get('status') as IssueStatus | null) ?? null,
++      priority: (params.get('priority') as IssuePriority | null) ?? null,
++      assigneeId: params.get('assigneeId'),
++      projectId: params.get('projectId'),
++      page: params.get('page') ? Number(params.get('page')) : 1,
++      pageSize: 10,
++      sortBy: (params.get('sortBy') as IssueFilters['sortBy']) ?? null,
++      sortDirection: (params.get('sortDirection') as 'asc' | 'desc') ?? 'asc',
++    };
++  }
++}
+diff --git a/src/app/shared/components/pagination/pagination.component.html b/src/app/shared/components/pagination/pagination.component.html
+new file mode 100644
+index 0000000..a41eda9
+--- /dev/null
++++ b/src/app/shared/components/pagination/pagination.component.html
+@@ -0,0 +1,24 @@
++<div class="pagination">
++  <span class="pagination__range">{{ rangeLabel() }}</span>
++  <div class="pagination__controls">
++    <button
++      mat-icon-button
++      type="button"
++      [disabled]="!canGoPrevious()"
++      (click)="previous()"
++      aria-label="Previous page"
++    >
++      <mat-icon>chevron_left</mat-icon>
++    </button>
++    <span class="pagination__page">Page {{ page$() }} of {{ totalPages$() }}</span>
++    <button
++      mat-icon-button
++      type="button"
++      [disabled]="!canGoNext()"
++      (click)="next()"
++      aria-label="Next page"
++    >
++      <mat-icon>chevron_right</mat-icon>
++    </button>
++  </div>
++</div>
+diff --git a/src/app/shared/components/pagination/pagination.component.scss b/src/app/shared/components/pagination/pagination.component.scss
+new file mode 100644
+index 0000000..42a9ebe
+--- /dev/null
++++ b/src/app/shared/components/pagination/pagination.component.scss
+@@ -0,0 +1,19 @@
++.pagination {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  padding-top: var(--db-space-sm);
++  font-size: 0.8rem;
++  color: var(--db-color-text-secondary);
++}
++
++.pagination__controls {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-xs);
++}
++
++.pagination__page {
++  min-width: 100px;
++  text-align: center;
++}
+diff --git a/src/app/shared/components/pagination/pagination.component.ts b/src/app/shared/components/pagination/pagination.component.ts
+new file mode 100644
+index 0000000..980cb09
+--- /dev/null
++++ b/src/app/shared/components/pagination/pagination.component.ts
+@@ -0,0 +1,65 @@
++import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, computed, signal } from '@angular/core';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++
++@Component({
++  selector: 'app-pagination',
++  standalone: true,
++  imports: [MatButtonModule, MatIconModule],
++  templateUrl: './pagination.component.html',
++  styleUrl: './pagination.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class PaginationComponent {
++  private readonly pageSignal = signal(1);
++  private readonly totalPagesSignal = signal(1);
++  private readonly totalItemsSignal = signal(0);
++  private readonly pageSizeSignal = signal(10);
++
++  @Input({ required: true })
++  set page(value: number) {
++    this.pageSignal.set(value);
++  }
++  @Input({ required: true })
++  set totalPages(value: number) {
++    this.totalPagesSignal.set(value);
++  }
++  @Input({ required: true })
++  set totalItems(value: number) {
++    this.totalItemsSignal.set(value);
++  }
++  @Input({ required: true })
++  set pageSize(value: number) {
++    this.pageSizeSignal.set(value);
++  }
++
++  @Output() pageChange = new EventEmitter<number>();
++
++  readonly page$ = this.pageSignal.asReadonly();
++  readonly totalPages$ = this.totalPagesSignal.asReadonly();
++
++  readonly rangeLabel = computed(() => {
++    const total = this.totalItemsSignal();
++    if (total === 0) {
++      return 'No results';
++    }
++    const start = (this.pageSignal() - 1) * this.pageSizeSignal() + 1;
++    const end = Math.min(this.pageSignal() * this.pageSizeSignal(), total);
++    return `${start}-${end} of ${total}`;
++  });
++
++  readonly canGoPrevious = computed(() => this.pageSignal() > 1);
++  readonly canGoNext = computed(() => this.pageSignal() < this.totalPagesSignal());
++
++  previous(): void {
++    if (this.canGoPrevious()) {
++      this.pageChange.emit(this.pageSignal() - 1);
++    }
++  }
++
++  next(): void {
++    if (this.canGoNext()) {
++      this.pageChange.emit(this.pageSignal() + 1);
++    }
++  }
++}
+diff --git a/src/app/shared/components/search-input/search-input.component.html b/src/app/shared/components/search-input/search-input.component.html
+new file mode 100644
+index 0000000..c04d6c2
+--- /dev/null
++++ b/src/app/shared/components/search-input/search-input.component.html
+@@ -0,0 +1,11 @@
++<mat-form-field appearance="outline" class="search-input">
++  <mat-icon matPrefix>search</mat-icon>
++  <input matInput [formControl]="control" [placeholder]="placeholder" />
++  @if (loading) {
++    <mat-icon matSuffix class="search-input__spinner">autorenew</mat-icon>
++  } @else if (control.value) {
++    <button mat-icon-button matSuffix type="button" aria-label="Clear search" (click)="clear()">
++      <mat-icon>close</mat-icon>
++    </button>
++  }
++</mat-form-field>
+diff --git a/src/app/shared/components/search-input/search-input.component.scss b/src/app/shared/components/search-input/search-input.component.scss
+new file mode 100644
+index 0000000..e3e4d22
+--- /dev/null
++++ b/src/app/shared/components/search-input/search-input.component.scss
+@@ -0,0 +1,18 @@
++.search-input {
++  width: 100%;
++
++  ::ng-deep .mat-mdc-text-field-wrapper {
++    height: 44px;
++  }
++}
++
++.search-input__spinner {
++  animation: search-input-spin 0.9s linear infinite;
++  color: var(--db-color-text-secondary);
++}
++
++@keyframes search-input-spin {
++  to {
++    transform: rotate(360deg);
++  }
++}
+diff --git a/src/app/shared/components/search-input/search-input.component.ts b/src/app/shared/components/search-input/search-input.component.ts
+new file mode 100644
+index 0000000..de441ac
+--- /dev/null
++++ b/src/app/shared/components/search-input/search-input.component.ts
+@@ -0,0 +1,58 @@
++import {
++  ChangeDetectionStrategy,
++  Component,
++  EventEmitter,
++  Input,
++  OnDestroy,
++  OnInit,
++  Output,
++} from '@angular/core';
++import { FormControl, ReactiveFormsModule } from '@angular/forms';
++import { Subscription, debounceTime, distinctUntilChanged } from 'rxjs';
++import { MatFormFieldModule } from '@angular/material/form-field';
++import { MatInputModule } from '@angular/material/input';
++import { MatIconModule } from '@angular/material/icon';
++import { MatButtonModule } from '@angular/material/button';
++
++/**
++ * Debounced search box — emits `search` at most once per `debounceMs` and
++ * only when the (trimmed) value actually changed, so consumers never fire a
++ * request per keystroke. Has its own clear button and can show a spinner
++ * via `loading` while the consumer's request is in flight.
++ */
++@Component({
++  selector: 'app-search-input',
++  standalone: true,
++  imports: [ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatIconModule, MatButtonModule],
++  templateUrl: './search-input.component.html',
++  styleUrl: './search-input.component.scss',
++  changeDetection: ChangeDetectionStrategy.OnPush,
++})
++export class SearchInputComponent implements OnInit, OnDestroy {
++  @Input() placeholder = 'Search...';
++  @Input() debounceMs = 300;
++  @Input() loading = false;
++  @Input()
++  set value(val: string) {
++    this.control.setValue(val ?? '', { emitEvent: false });
++  }
++
++  @Output() searchChange = new EventEmitter<string>();
++
++  readonly control = new FormControl('', { nonNullable: true });
++  private subscription: Subscription | null = null;
++
++  ngOnInit(): void {
++    this.subscription = this.control.valueChanges
++      .pipe(debounceTime(this.debounceMs), distinctUntilChanged())
++      .subscribe((value) => this.searchChange.emit(value.trim()));
++  }
++
++  ngOnDestroy(): void {
++    this.subscription?.unsubscribe();
++  }
++
++  clear(): void {
++    this.control.setValue('');
++  }
++}

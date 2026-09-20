@@ -8,7 +8,7 @@ import {
   SimpleChanges,
 } from '@angular/core';
 import { AbstractControl } from '@angular/forms';
-import { Subscription, merge } from 'rxjs';
+import { Subscription } from 'rxjs';
 
 /**
  * Maps a validator error key to its display message. Centralized here so
@@ -66,19 +66,19 @@ export class FormErrorComponent implements OnChanges, OnDestroy {
 
   ngOnChanges(changes: SimpleChanges): void {
     if ('control' in changes) {
-      // The control can carry errors that were set imperatively (e.g. a
-      // cross-field validator calling confirm.setErrors(...) on a *sibling*
-      // control). OnPush won't re-check this component on its own in that
-      // case — no local event fired and the @Input reference didn't change —
-      // so we subscribe to the control's own change streams and force a
-      // check whenever either fires.
+      // The control's displayed error can change for reasons this component
+      // never sees directly: a cross-field validator on a *sibling* control
+      // calling setErrors() imperatively, or — the case that mattered most
+      // in practice — form.markAllAsTouched() on submit, which flips
+      // `touched` without emitting through statusChanges or valueChanges at
+      // all. `control.events` is the one stream that covers every one of
+      // these (TouchedChangeEvent, StatusChangeEvent, ValueChangeEvent), so
+      // subscribe to it and force a check on every emission.
       this.subscription?.unsubscribe();
       this.subscription = null;
 
       if (this.control) {
-        this.subscription = merge(this.control.statusChanges, this.control.valueChanges).subscribe(
-          () => this.cdr.markForCheck(),
-        );
+        this.subscription = this.control.events.subscribe(() => this.cdr.markForCheck());
       }
     }
   }

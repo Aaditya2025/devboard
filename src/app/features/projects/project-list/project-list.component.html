@@ -1,0 +1,78 @@
+<app-page-header title="Projects" subtitle="All projects across your organization.">
+  <button mat-flat-button color="primary" type="button" routerLink="/projects/new">
+    <mat-icon>add</mat-icon>
+    New Project
+  </button>
+</app-page-header>
+
+@if (loading()) {
+  <app-loading-spinner message="Loading projects..." />
+} @else if (error()) {
+  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
+} @else if (projects().length === 0) {
+  <app-empty-state
+    icon="folder_open"
+    message="No projects found."
+    actionLabel="Create Project"
+    (action)="navigateToNew()"
+  />
+} @else {
+  <div class="project-grid">
+    @for (project of projects(); track project.id) {
+      <a class="project-card" [routerLink]="['/projects', project.id]">
+        <div class="project-card__header">
+          <span class="project-card__key">{{ project.key }}</span>
+          <app-project-status-badge [status]="project.status" />
+        </div>
+        <h2 class="project-card__name">{{ project.name }}</h2>
+        <p class="project-card__description">{{ project.description }}</p>
+
+        <div class="project-card__progress">
+          <div class="project-card__progress-track">
+            <div class="project-card__progress-fill" [style.width.%]="project.progress"></div>
+          </div>
+          <span class="project-card__progress-label">{{ project.progress }}%</span>
+        </div>
+
+        <div class="project-card__footer">
+          <span class="project-card__stat">
+            <mat-icon>group</mat-icon>
+            {{ project.memberCount }}
+          </span>
+          <span class="project-card__stat">
+            <mat-icon>task_alt</mat-icon>
+            {{ project.issueCount }}
+          </span>
+          <span class="project-card__stat project-card__stat--date">
+            Created {{ project.createdDate }}
+          </span>
+
+          <button
+            mat-icon-button
+            class="project-card__menu-trigger"
+            type="button"
+            [matMenuTriggerFor]="menu"
+            (click)="$event.preventDefault(); $event.stopPropagation()"
+            aria-label="Project actions"
+          >
+            <mat-icon>more_vert</mat-icon>
+          </button>
+          <mat-menu #menu="matMenu">
+            <a mat-menu-item [routerLink]="['/projects', project.id]">
+              <mat-icon>open_in_new</mat-icon>
+              <span>Open</span>
+            </a>
+            <a mat-menu-item [routerLink]="['/projects', project.id, 'edit']">
+              <mat-icon>edit</mat-icon>
+              <span>Edit</span>
+            </a>
+            <button mat-menu-item type="button" (click)="archive(project, $event)">
+              <mat-icon>archive</mat-icon>
+              <span>Archive</span>
+            </button>
+          </mat-menu>
+        </div>
+      </a>
+    }
+  </div>
+}

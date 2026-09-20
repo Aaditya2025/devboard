@@ -1,0 +1,17 @@
+.add-member__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--db-space-sm);
+  min-width: 320px;
+  padding-top: 4px;
+}
+
+.add-member__field {
+  width: 100%;
+}
+
+.add-member__loading,
+.add-member__empty {
+  color: var(--db-color-text-secondary);
+  font-size: 0.9rem;
+}

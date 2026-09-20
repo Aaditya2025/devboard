@@ -1,0 +1,40 @@
+<h2 mat-dialog-title>Add Member</h2>
+<mat-dialog-content>
+  @if (loading()) {
+    <p class="add-member__loading">Loading users...</p>
+  } @else if (addableUsers().length === 0) {
+    <p class="add-member__empty">Everyone is already a member of this project.</p>
+  } @else {
+    <form [formGroup]="form" class="add-member__form" novalidate>
+      <mat-form-field appearance="outline" class="add-member__field">
+        <mat-label>User</mat-label>
+        <mat-select formControlName="userId" required>
+          @for (user of addableUsers(); track user.id) {
+            <mat-option [value]="user.id">{{ user.name }} ({{ user.email }})</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="add-member__field">
+        <mat-label>Role</mat-label>
+        <mat-select formControlName="role" required>
+          @for (role of roleOptions; track role) {
+            <mat-option [value]="role">{{ role }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </form>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()">Cancel</button>
+  <button
+    mat-flat-button
+    color="primary"
+    type="button"
+    [disabled]="loading() || addableUsers().length === 0 || submitting()"
+    (click)="submit()"
+  >
+    {{ submitting() ? 'Adding...' : 'Add Member' }}
+  </button>
+</mat-dialog-actions>

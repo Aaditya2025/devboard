@@ -1,0 +1,58 @@
+<div class="members">
+  <div class="members__header">
+    <h2 class="members__title">Members</h2>
+    <button mat-stroked-button color="primary" type="button" (click)="openAddMemberDialog()">
+      <mat-icon>person_add</mat-icon>
+      Add Member
+    </button>
+  </div>
+
+  @if (loading()) {
+    <app-loading-spinner message="Loading members..." />
+  } @else if (members().length === 0) {
+    <app-empty-state icon="group_off" message="No members yet." />
+  } @else {
+    <div class="members__table" role="table">
+      <div class="members__row members__row--header" role="row">
+        <span>Name</span>
+        <span>Email</span>
+        <span>Role</span>
+        <span>Joined</span>
+        <span></span>
+      </div>
+      @for (member of members(); track member.id) {
+        <div class="members__row" role="row">
+          <span class="members__name">{{ member.name }}</span>
+          <span class="members__email">{{ member.email }}</span>
+          <span class="members__role">{{ member.role }}</span>
+          <span class="members__joined">{{ member.joinedDate }}</span>
+          <span class="members__actions">
+            <button
+              mat-icon-button
+              type="button"
+              [matMenuTriggerFor]="roleMenu"
+              aria-label="Change role"
+            >
+              <mat-icon>swap_horiz</mat-icon>
+            </button>
+            <mat-menu #roleMenu="matMenu">
+              @for (role of roleOptions; track role) {
+                <button mat-menu-item type="button" (click)="changeRole(member, role)">
+                  {{ role }}
+                </button>
+              }
+            </mat-menu>
+            <button
+              mat-icon-button
+              type="button"
+              (click)="removeMember(member)"
+              aria-label="Remove member"
+            >
+              <mat-icon>person_remove</mat-icon>
+            </button>
+          </span>
+        </div>
+      }
+    </div>
+  }
+</div>
