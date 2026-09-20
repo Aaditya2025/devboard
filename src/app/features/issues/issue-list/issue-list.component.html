@@ -1,0 +1,120 @@
+<app-page-header title="Issues" subtitle="All issues across your projects.">
+  <button mat-flat-button color="primary" type="button" routerLink="/issues/new">
+    <mat-icon>add</mat-icon>
+    New Issue
+  </button>
+</app-page-header>
+
+<div class="issue-list__filters">
+  <app-search-input
+    placeholder="Search by title or key..."
+    [value]="filters().search ?? ''"
+    [loading]="loading()"
+    (searchChange)="onSearch($event)"
+  />
+
+  <mat-form-field appearance="outline" class="issue-list__filter-field">
+    <mat-label>Status</mat-label>
+    <mat-select [value]="filters().status" (selectionChange)="onStatusChange($event.value)">
+      <mat-option [value]="null">All</mat-option>
+      @for (status of statusOptions; track status) {
+        <mat-option [value]="status">{{ status }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="issue-list__filter-field">
+    <mat-label>Priority</mat-label>
+    <mat-select [value]="filters().priority" (selectionChange)="onPriorityChange($event.value)">
+      <mat-option [value]="null">All</mat-option>
+      @for (priority of priorityOptions; track priority) {
+        <mat-option [value]="priority">{{ priority }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="issue-list__filter-field">
+    <mat-label>Assignee</mat-label>
+    <mat-select [value]="filters().assigneeId" (selectionChange)="onAssigneeChange($event.value)">
+      <mat-option [value]="null">All</mat-option>
+      @for (user of users(); track user.id) {
+        <mat-option [value]="user.id">{{ user.firstName }} {{ user.lastName }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="issue-list__filter-field">
+    <mat-label>Project</mat-label>
+    <mat-select [value]="filters().projectId" (selectionChange)="onProjectChange($event.value)">
+      <mat-option [value]="null">All</mat-option>
+      @for (project of projects(); track project.id) {
+        <mat-option [value]="project.id">{{ project.name }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <button mat-button type="button" (click)="clearFilters()">
+    <mat-icon>filter_alt_off</mat-icon>
+    Clear
+  </button>
+</div>
+
+@if (loading() && issues().length === 0) {
+  <app-loading-spinner message="Loading issues..." />
+} @else if (error()) {
+  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
+} @else if (issues().length === 0) {
+  <app-empty-state icon="task_alt" message="No issues found." hint="Try changing your filters." />
+} @else {
+  <div class="issue-table" role="table">
+    <div class="issue-table__row issue-table__row--header" role="row">
+      <span>Key</span>
+      <span>Title</span>
+      <button class="issue-table__sort" type="button" (click)="onSort('status')">
+        Status
+        @if (filters().sortBy === 'status') {
+          <mat-icon>{{ filters().sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+        }
+      </button>
+      <button class="issue-table__sort" type="button" (click)="onSort('priority')">
+        Priority
+        @if (filters().sortBy === 'priority') {
+          <mat-icon>{{ filters().sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+        }
+      </button>
+      <span>Assignee</span>
+      <button class="issue-table__sort" type="button" (click)="onSort('createdDate')">
+        Created
+        @if (filters().sortBy === 'createdDate') {
+          <mat-icon>{{ filters().sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+        }
+      </button>
+      <button class="issue-table__sort" type="button" (click)="onSort('dueDate')">
+        Due
+        @if (filters().sortBy === 'dueDate') {
+          <mat-icon>{{ filters().sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+        }
+      </button>
+    </div>
+
+    @for (issue of issues(); track issue.id) {
+      <a class="issue-table__row" role="row" [routerLink]="['/issues', issue.id]">
+        <span class="issue-table__key">{{ issue.key }}</span>
+        <span class="issue-table__title">{{ issue.title }}</span>
+        <app-status-badge [status]="issue.status" />
+        <app-priority-badge [priority]="issue.priority" />
+        <span class="issue-table__assignee">{{ assigneeName(issue) }}</span>
+        <span class="issue-table__date">{{ issue.createdDate }}</span>
+        <span class="issue-table__date">{{ issue.dueDate ?? '—' }}</span>
+      </a>
+    }
+  </div>
+
+  <app-pagination
+    [page]="filters().page ?? 1"
+    [totalPages]="totalPages()"
+    [totalItems]="totalItems()"
+    [pageSize]="filters().pageSize ?? 10"
+    (pageChange)="onPageChange($event)"
+  />
+}

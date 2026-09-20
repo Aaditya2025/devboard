@@ -1,0 +1,125 @@
+.issue-detail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--db-space-md);
+  margin-bottom: var(--db-space-lg);
+  flex-wrap: wrap;
+}
+
+.issue-detail__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.issue-detail__key {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--db-color-text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.issue-detail__title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.issue-detail__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-sm);
+}
+
+.issue-detail__layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: var(--db-space-lg);
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.issue-detail__section {
+  background: var(--db-color-surface);
+  border: 1px solid var(--db-color-border);
+  border-radius: var(--db-radius-md);
+  padding: var(--db-space-lg);
+  box-shadow: var(--db-shadow-sm);
+  margin-bottom: var(--db-space-md);
+}
+
+.issue-detail__section-title {
+  margin: 0 0 var(--db-space-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.issue-detail__description {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--db-color-text-secondary);
+  white-space: pre-wrap;
+}
+
+.issue-detail__empty-activity {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--db-color-text-secondary);
+}
+
+.issue-detail__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--db-space-md);
+  background: var(--db-color-surface);
+  border: 1px solid var(--db-color-border);
+  border-radius: var(--db-radius-md);
+  padding: var(--db-space-lg);
+  box-shadow: var(--db-shadow-sm);
+  height: fit-content;
+}
+
+.issue-detail__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.issue-detail__field-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--db-color-text-secondary);
+}
+
+.issue-detail__field-value {
+  font-size: 0.85rem;
+  color: var(--db-color-text-primary);
+}
+
+.issue-detail__field-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.issue-detail__labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.issue-detail__label-chip {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: #fff;
+}

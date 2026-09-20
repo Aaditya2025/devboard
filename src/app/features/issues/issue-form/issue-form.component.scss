@@ -1,0 +1,42 @@
+.issue-form {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+}
+
+.issue-form__field {
+  width: 100%;
+}
+
+.issue-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--db-space-md);
+}
+
+.issue-form__labels {
+  margin-bottom: var(--db-space-md);
+}
+
+.issue-form__labels-title {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--db-color-text-secondary);
+  margin-bottom: var(--db-space-xs);
+}
+
+.issue-form__error {
+  background: color-mix(in srgb, var(--db-color-danger) 10%, transparent);
+  color: var(--db-color-danger);
+  border-radius: var(--db-radius-sm);
+  padding: var(--db-space-sm) var(--db-space-md);
+  font-size: 0.85rem;
+  margin-bottom: var(--db-space-md);
+}
+
+.issue-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--db-space-sm);
+  margin-top: var(--db-space-sm);
+}

@@ -1,0 +1,96 @@
+<app-page-header [title]="isEditMode ? 'Edit Issue' : 'New Issue'" />
+
+@if (loadingExisting()) {
+  <app-loading-spinner message="Loading issue..." />
+} @else {
+  <form [formGroup]="form" (ngSubmit)="submit()" class="issue-form" novalidate>
+    <mat-form-field appearance="outline" class="issue-form__field">
+      <mat-label>Title</mat-label>
+      <input matInput formControlName="title" required />
+    </mat-form-field>
+    <app-form-error [control]="form.controls.title" label="Title" />
+
+    <mat-form-field appearance="outline" class="issue-form__field">
+      <mat-label>Description</mat-label>
+      <textarea matInput formControlName="description" rows="4"></textarea>
+    </mat-form-field>
+
+    <div class="issue-form__row">
+      <div>
+        <mat-form-field appearance="outline" class="issue-form__field">
+          <mat-label>Project</mat-label>
+          <mat-select formControlName="projectId" required>
+            @for (project of projects(); track project.id) {
+              <mat-option [value]="project.id">{{ project.name }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <app-form-error [control]="form.controls.projectId" label="Project" />
+      </div>
+
+      <div>
+        <mat-form-field appearance="outline" class="issue-form__field">
+          <mat-label>Assignee</mat-label>
+          <mat-select formControlName="assigneeId">
+            <mat-option [value]="null">Unassigned</mat-option>
+            @for (user of users(); track user.id) {
+              <mat-option [value]="user.id">{{ user.firstName }} {{ user.lastName }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+    </div>
+
+    <div class="issue-form__row">
+      <mat-form-field appearance="outline" class="issue-form__field">
+        <mat-label>Status</mat-label>
+        <mat-select formControlName="status" required>
+          @for (status of statusOptions; track status) {
+            <mat-option [value]="status">{{ status }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="issue-form__field">
+        <mat-label>Priority</mat-label>
+        <mat-select formControlName="priority" required>
+          @for (priority of priorityOptions; track priority) {
+            <mat-option [value]="priority">{{ priority }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <mat-form-field appearance="outline" class="issue-form__field">
+      <mat-label>Due Date</mat-label>
+      <input matInput [matDatepicker]="dueDatePicker" formControlName="dueDate" />
+      <mat-datepicker-toggle matIconSuffix [for]="dueDatePicker" />
+      <mat-datepicker #dueDatePicker />
+    </mat-form-field>
+
+    <div class="issue-form__labels">
+      <span class="issue-form__labels-title">Labels</span>
+      <mat-chip-listbox multiple aria-label="Labels">
+        @for (label of allLabels; track label.id) {
+          <mat-chip-option
+            [selected]="form.controls.labelIds.value.includes(label.id)"
+            (click)="toggleLabel(label.id)"
+          >
+            {{ label.name }}
+          </mat-chip-option>
+        }
+      </mat-chip-listbox>
+    </div>
+
+    @if (errorMessage()) {
+      <div class="issue-form__error" role="alert">{{ errorMessage() }}</div>
+    }
+
+    <div class="issue-form__actions">
+      <button mat-button type="button" routerLink="/issues">Cancel</button>
+      <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Issue' }}
+      </button>
+    </div>
+  </form>
+}

@@ -1,0 +1,18 @@
+.search-input {
+  width: 100%;
+
+  ::ng-deep .mat-mdc-text-field-wrapper {
+    height: 44px;
+  }
+}
+
+.search-input__spinner {
+  animation: search-input-spin 0.9s linear infinite;
+  color: var(--db-color-text-secondary);
+}
+
+@keyframes search-input-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

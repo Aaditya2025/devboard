@@ -1,0 +1,24 @@
+<div class="pagination">
+  <span class="pagination__range">{{ rangeLabel() }}</span>
+  <div class="pagination__controls">
+    <button
+      mat-icon-button
+      type="button"
+      [disabled]="!canGoPrevious()"
+      (click)="previous()"
+      aria-label="Previous page"
+    >
+      <mat-icon>chevron_left</mat-icon>
+    </button>
+    <span class="pagination__page">Page {{ page$() }} of {{ totalPages$() }}</span>
+    <button
+      mat-icon-button
+      type="button"
+      [disabled]="!canGoNext()"
+      (click)="next()"
+      aria-label="Next page"
+    >
+      <mat-icon>chevron_right</mat-icon>
+    </button>
+  </div>
+</div>

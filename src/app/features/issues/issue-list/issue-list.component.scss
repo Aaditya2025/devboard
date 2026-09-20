@@ -1,0 +1,96 @@
+.issue-list__filters {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--db-space-sm);
+  margin-bottom: var(--db-space-md);
+  flex-wrap: wrap;
+
+  app-search-input {
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
+}
+
+.issue-list__filter-field {
+  width: 160px;
+}
+
+.issue-table {
+  display: flex;
+  flex-direction: column;
+  background: var(--db-color-surface);
+  border: 1px solid var(--db-color-border);
+  border-radius: var(--db-radius-md);
+  overflow: hidden;
+}
+
+.issue-table__row {
+  display: grid;
+  grid-template-columns: 80px 2fr 120px 110px 140px 100px 100px;
+  align-items: center;
+  gap: var(--db-space-sm);
+  padding: var(--db-space-sm) var(--db-space-md);
+  border-bottom: 1px solid var(--db-color-border);
+  text-decoration: none;
+  color: inherit;
+  font-size: 0.85rem;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover:not(&--header) {
+    background: var(--db-color-surface-alt);
+  }
+}
+
+.issue-table__row--header {
+  background: var(--db-color-surface-alt);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--db-color-text-secondary);
+}
+
+.issue-table__sort {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--db-color-text-secondary);
+  cursor: pointer;
+  text-align: left;
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.issue-table__key {
+  font-weight: 600;
+  color: var(--db-color-text-secondary);
+}
+
+.issue-table__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--db-color-text-primary);
+}
+
+.issue-table__assignee,
+.issue-table__date {
+  color: var(--db-color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

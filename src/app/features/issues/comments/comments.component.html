@@ -1,0 +1,57 @@
+<div class="comments">
+  <h2 class="comments__title">Comments</h2>
+
+  @if (loading()) {
+    <app-loading-spinner message="Loading comments..." />
+  } @else {
+    @if (comments().length === 0) {
+      <app-empty-state icon="chat_bubble_outline" message="No comments yet." />
+    } @else {
+      <ul class="comments__list">
+        @for (comment of comments(); track comment.id) {
+          <li class="comments__item">
+            <div class="comments__avatar">{{ comment.userName.charAt(0) }}</div>
+            <div class="comments__body">
+              <div class="comments__meta">
+                <span class="comments__author">{{ comment.userName }}</span>
+                <time class="comments__time">{{ comment.createdDate | relativeTime }}</time>
+                @if (isOwn(comment) && editingCommentId() !== comment.id) {
+                  <button mat-icon-button type="button" (click)="startEdit(comment)" aria-label="Edit comment">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button type="button" (click)="deleteComment(comment)" aria-label="Delete comment">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                }
+              </div>
+
+              @if (editingCommentId() === comment.id) {
+                <form [formGroup]="editForm" (ngSubmit)="saveEdit(comment)" class="comments__edit-form">
+                  <mat-form-field appearance="outline" class="comments__edit-field">
+                    <textarea matInput formControlName="content" rows="2"></textarea>
+                  </mat-form-field>
+                  <div class="comments__edit-actions">
+                    <button mat-button type="button" (click)="cancelEdit()">Cancel</button>
+                    <button mat-flat-button color="primary" type="submit">Save</button>
+                  </div>
+                </form>
+              } @else {
+                <p class="comments__content">{{ comment.content }}</p>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="submit()" class="comments__form">
+      <mat-form-field appearance="outline" class="comments__form-field">
+        <mat-label>Add a comment</mat-label>
+        <textarea matInput formControlName="content" rows="2"></textarea>
+      </mat-form-field>
+      <button mat-flat-button color="primary" type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Posting...' : 'Comment' }}
+      </button>
+    </form>
+  }
+</div>

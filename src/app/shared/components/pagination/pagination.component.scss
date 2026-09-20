@@ -1,0 +1,19 @@
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--db-space-sm);
+  font-size: 0.8rem;
+  color: var(--db-color-text-secondary);
+}
+
+.pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-xs);
+}
+
+.pagination__page {
+  min-width: 100px;
+  text-align: center;
+}

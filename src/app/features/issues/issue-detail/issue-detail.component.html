@@ -1,0 +1,122 @@
+@if (loading()) {
+  <app-loading-spinner message="Loading issue..." />
+} @else if (error()) {
+  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
+} @else {
+  @if (issue(); as issue) {
+    <div class="issue-detail">
+      <div class="issue-detail__header">
+        <div class="issue-detail__heading">
+          <span class="issue-detail__key">{{ issue.key }}</span>
+          <h1 class="issue-detail__title">{{ issue.title }}</h1>
+        </div>
+        <div class="issue-detail__header-actions">
+          <button mat-stroked-button color="primary" type="button" [routerLink]="['/issues', issue.id, 'edit']">
+            <mat-icon>edit</mat-icon>
+            Edit
+          </button>
+          <button mat-icon-button type="button" (click)="deleteIssue()" aria-label="Delete issue">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="issue-detail__layout">
+        <div class="issue-detail__main">
+          <section class="issue-detail__section">
+            <h2 class="issue-detail__section-title">Description</h2>
+            <p class="issue-detail__description">{{ issue.description || 'No description provided.' }}</p>
+          </section>
+
+          <section class="issue-detail__section">
+            <app-comments [issueId]="issue.id" />
+          </section>
+
+          <section class="issue-detail__section">
+            <h2 class="issue-detail__section-title">Activity</h2>
+            @if (issueActivity().length === 0) {
+              <p class="issue-detail__empty-activity">No activity recorded for this issue yet.</p>
+            } @else {
+              <app-activity-timeline [activities]="issueActivity()" />
+            }
+          </section>
+        </div>
+
+        <aside class="issue-detail__sidebar">
+          <div class="issue-detail__field">
+            <span class="issue-detail__field-label">Status</span>
+            <button mat-stroked-button type="button" [matMenuTriggerFor]="statusMenu" class="issue-detail__field-trigger">
+              <app-status-badge [status]="issue.status" />
+              <mat-icon>arrow_drop_down</mat-icon>
+            </button>
+            <mat-menu #statusMenu="matMenu">
+              @for (status of statusOptions; track status) {
+                <button mat-menu-item type="button" (click)="changeStatus(status)">{{ status }}</button>
+              }
+            </mat-menu>
+          </div>
+
+          <div class="issue-detail__field">
+            <span class="issue-detail__field-label">Priority</span>
+            <button mat-stroked-button type="button" [matMenuTriggerFor]="priorityMenu" class="issue-detail__field-trigger">
+              <app-priority-badge [priority]="issue.priority" />
+              <mat-icon>arrow_drop_down</mat-icon>
+            </button>
+            <mat-menu #priorityMenu="matMenu">
+              @for (priority of priorityOptions; track priority) {
+                <button mat-menu-item type="button" (click)="changePriority(priority)">{{ priority }}</button>
+              }
+            </mat-menu>
+          </div>
+
+          <div class="issue-detail__field">
+            <span class="issue-detail__field-label">Assignee</span>
+            <button mat-stroked-button type="button" [matMenuTriggerFor]="assigneeMenu" class="issue-detail__field-trigger">
+              {{ assigneeName() }}
+              <mat-icon>arrow_drop_down</mat-icon>
+            </button>
+            <mat-menu #assigneeMenu="matMenu">
+              <button mat-menu-item type="button" (click)="assignTo(null)">Unassigned</button>
+              @for (user of users(); track user.id) {
+                <button mat-menu-item type="button" (click)="assignTo(user.id)">
+                  {{ user.firstName }} {{ user.lastName }}
+                </button>
+              }
+            </mat-menu>
+          </div>
+
+          <div class="issue-detail__field">
+            <span class="issue-detail__field-label">Reporter</span>
+            <span class="issue-detail__field-value">{{ reporterName() }}</span>
+          </div>
+
+          <div class="issue-detail__field">
+            <span class="issue-detail__field-label">Created</span>
+            <span class="issue-detail__field-value">{{ issue.createdDate }}</span>
+          </div>
+
+          <div class="issue-detail__field">
+            <span class="issue-detail__field-label">Updated</span>
+            <span class="issue-detail__field-value">{{ issue.updatedDate }}</span>
+          </div>
+
+          <div class="issue-detail__field">
+            <span class="issue-detail__field-label">Due Date</span>
+            <span class="issue-detail__field-value">{{ issue.dueDate ?? 'None' }}</span>
+          </div>
+
+          @if (issue.labels.length > 0) {
+            <div class="issue-detail__field">
+              <span class="issue-detail__field-label">Labels</span>
+              <div class="issue-detail__labels">
+                @for (label of issue.labels; track label.id) {
+                  <span class="issue-detail__label-chip" [style.background]="label.color">{{ label.name }}</span>
+                }
+              </div>
+            </div>
+          }
+        </aside>
+      </div>
+    </div>
+  }
+}
