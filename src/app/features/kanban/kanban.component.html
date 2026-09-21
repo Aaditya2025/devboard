@@ -1,0 +1,85 @@
+<app-page-header title="Kanban" subtitle="Drag issues between columns to update their status.">
+  <button mat-flat-button color="primary" type="button" routerLink="/issues/new">
+    <mat-icon>add</mat-icon>
+    New Issue
+  </button>
+</app-page-header>
+
+<div class="kanban__filters">
+  <app-search-input placeholder="Search by title or key..." (searchChange)="onSearch($event)" />
+
+  <mat-form-field appearance="outline" class="kanban__filter-field">
+    <mat-label>Project</mat-label>
+    <mat-select (selectionChange)="onProjectChange($event.value)">
+      <mat-option [value]="null">All</mat-option>
+      @for (project of projects(); track project.id) {
+        <mat-option [value]="project.id">{{ project.name }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="kanban__filter-field">
+    <mat-label>Assignee</mat-label>
+    <mat-select (selectionChange)="onAssigneeChange($event.value)">
+      <mat-option [value]="null">All</mat-option>
+      @for (user of users(); track user.id) {
+        <mat-option [value]="user.id">{{ user.firstName }} {{ user.lastName }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="kanban__filter-field">
+    <mat-label>Priority</mat-label>
+    <mat-select (selectionChange)="onPriorityChange($event.value)">
+      <mat-option [value]="null">All</mat-option>
+      @for (priority of priorityOptions; track priority) {
+        <mat-option [value]="priority">{{ priority }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+</div>
+
+@if (loading()) {
+  <app-loading-spinner message="Loading board..." />
+} @else if (error()) {
+  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
+} @else {
+  <div class="kanban-board" cdkDropListGroup>
+    @for (column of columnsMeta; track column.status) {
+      <div class="kanban-column">
+        <div class="kanban-column__header">
+          <span class="kanban-column__dot" [style.background]="'var(' + column.cssVar + ')'"></span>
+          <span class="kanban-column__label">{{ column.label }}</span>
+          <span class="kanban-column__count">{{ columnIssues(column.status).length }}</span>
+        </div>
+
+        <div
+          class="kanban-column__list"
+          [id]="column.status"
+          cdkDropList
+          [cdkDropListData]="columnIssues(column.status)"
+          [cdkDropListConnectedTo]="connectedDropListIds()"
+          (cdkDropListDropped)="drop($event, column.status)"
+        >
+          @for (issue of columnIssues(column.status); track issue.id) {
+            <a class="kanban-card" [routerLink]="['/issues', issue.id]" cdkDrag>
+              <div class="kanban-card__drag-preview" *cdkDragPreview>
+                <span class="kanban-card__key">{{ issue.key }}</span>
+                <span class="kanban-card__title">{{ issue.title }}</span>
+              </div>
+              <span class="kanban-card__key">{{ issue.key }}</span>
+              <p class="kanban-card__title">{{ issue.title }}</p>
+              <div class="kanban-card__footer">
+                <app-priority-badge [priority]="issue.priority" />
+                <span class="kanban-card__assignee">{{ assigneeName(issue) }}</span>
+              </div>
+            </a>
+          }
+          @if (columnIssues(column.status).length === 0) {
+            <p class="kanban-column__empty">No issues</p>
+          }
+        </div>
+      </div>
+    }
+  </div>
+}

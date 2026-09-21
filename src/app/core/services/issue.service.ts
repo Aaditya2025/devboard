@@ -47,27 +47,7 @@ export class IssueService {
 
   getFiltered(filters: IssueFilters): Observable<PaginationResponse<Issue>> {
     return delayed(() => {
-      let items = [...MOCK_ISSUES];
-
-      if (filters.search) {
-        const term = filters.search.trim().toLowerCase();
-        items = items.filter(
-          (issue) =>
-            issue.title.toLowerCase().includes(term) || issue.key.toLowerCase().includes(term),
-        );
-      }
-      if (filters.status) {
-        items = items.filter((issue) => issue.status === filters.status);
-      }
-      if (filters.priority) {
-        items = items.filter((issue) => issue.priority === filters.priority);
-      }
-      if (filters.assigneeId) {
-        items = items.filter((issue) => issue.assigneeId === filters.assigneeId);
-      }
-      if (filters.projectId) {
-        items = items.filter((issue) => issue.projectId === filters.projectId);
-      }
+      let items = this.applyFilters(filters);
 
       if (filters.sortBy) {
         const sortBy = filters.sortBy;
@@ -96,6 +76,41 @@ export class IssueService {
         totalPages,
       };
     });
+  }
+
+  /**
+   * Search/project/assignee/priority filtering with no sort or pagination —
+   * used by the Kanban board, which groups every matching issue by status
+   * into columns rather than paging through them.
+   */
+  getAllFiltered(filters: Omit<IssueFilters, 'status' | 'page' | 'pageSize' | 'sortBy' | 'sortDirection'>): Observable<Issue[]> {
+    return delayed(() => this.applyFilters(filters));
+  }
+
+  private applyFilters(filters: IssueFilters): Issue[] {
+    let items = [...MOCK_ISSUES];
+
+    if (filters.search) {
+      const term = filters.search.trim().toLowerCase();
+      items = items.filter(
+        (issue) =>
+          issue.title.toLowerCase().includes(term) || issue.key.toLowerCase().includes(term),
+      );
+    }
+    if (filters.status) {
+      items = items.filter((issue) => issue.status === filters.status);
+    }
+    if (filters.priority) {
+      items = items.filter((issue) => issue.priority === filters.priority);
+    }
+    if (filters.assigneeId) {
+      items = items.filter((issue) => issue.assigneeId === filters.assigneeId);
+    }
+    if (filters.projectId) {
+      items = items.filter((issue) => issue.projectId === filters.projectId);
+    }
+
+    return items;
   }
 
   create(payload: CreateIssuePayload): Observable<Issue> {

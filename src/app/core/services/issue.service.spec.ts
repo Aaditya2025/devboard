@@ -108,6 +108,33 @@ describe('IssueService', () => {
     });
   });
 
+  describe('getAllFiltered', () => {
+    it('returns every matching issue with no pagination applied', (done) => {
+      service.getAllFiltered({}).subscribe((issues) => {
+        service.getAll().subscribe((all) => {
+          expect(issues.length).toBe(all.length);
+          done();
+        });
+      });
+    });
+
+    it('applies search/project/assignee/priority filters', (done) => {
+      service.getAllFiltered({ projectId: 'proj-1' }).subscribe((issues) => {
+        expect(issues.length).toBeGreaterThan(0);
+        expect(issues.every((issue) => issue.projectId === 'proj-1')).toBe(true);
+        done();
+      });
+    });
+
+    it('returns issues across every status, suitable for grouping into Kanban columns', (done) => {
+      service.getAllFiltered({}).subscribe((issues) => {
+        const statuses = new Set(issues.map((i) => i.status));
+        expect(statuses.size).toBeGreaterThan(1);
+        done();
+      });
+    });
+  });
+
   describe('CRUD', () => {
     it('creates an issue with a generated key based on the project prefix', (done) => {
       service
@@ -130,27 +157,53 @@ describe('IssueService', () => {
     });
 
     it('updates only the provided fields', (done) => {
-      service.getAll().subscribe((issues) => {
-        const target = issues[0];
-        service.update(target.id, { title: 'Updated title only' }).subscribe((updated) => {
-          expect(updated.title).toBe('Updated title only');
-          expect(updated.status).toBe(target.status);
-          expect(updated.priority).toBe(target.priority);
-          done();
-        });
-      });
-    });
-
-    it('deletes an issue', (done) => {
-      service.getAll().subscribe((issuesBefore) => {
-        const target = issuesBefore[0];
-        service.delete(target.id).subscribe(() => {
-          service.getById(target.id).subscribe((found) => {
-            expect(found).toBeUndefined();
+      service
+        .create({
+          title: 'Original title',
+          description: '',
+          projectId: 'proj-1',
+          status: IssueStatus.Todo,
+          priority: IssuePriority.Medium,
+          assigneeId: null,
+          labelIds: [],
+          sprintId: null,
+          dueDate: null,
+        })
+        .subscribe((created) => {
+          service.update(created.id, { title: 'Updated title only' }).subscribe((updated) => {
+            expect(updated.title).toBe('Updated title only');
+            expect(updated.status).toBe(created.status);
+            expect(updated.priority).toBe(created.priority);
             done();
           });
         });
-      });
+    });
+
+    it('deletes an issue', (done) => {
+      // Deletes a throwaway issue created just for this test, rather than
+      // an existing seed issue — Jasmine's default random spec order means
+      // another test (e.g. a search-by-title test) could otherwise run
+      // after this one and find its expected seed data already gone.
+      service
+        .create({
+          title: 'Issue to delete',
+          description: '',
+          projectId: 'proj-1',
+          status: IssueStatus.Backlog,
+          priority: IssuePriority.Low,
+          assigneeId: null,
+          labelIds: [],
+          sprintId: null,
+          dueDate: null,
+        })
+        .subscribe((created) => {
+          service.delete(created.id).subscribe(() => {
+            service.getById(created.id).subscribe((found) => {
+              expect(found).toBeUndefined();
+              done();
+            });
+          });
+        });
     });
   });
 });
