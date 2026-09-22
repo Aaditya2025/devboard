@@ -1,0 +1,105 @@
+<app-page-header title="Profile" subtitle="Manage your account details." />
+
+@if (currentUser(); as user) {
+  <div class="profile">
+    <section class="profile__card">
+      <div class="profile__avatar-row">
+        <div class="profile__avatar">{{ initials() }}</div>
+        <div class="profile__avatar-actions">
+          <label class="profile__avatar-upload">
+            <input type="file" accept="image/*" (change)="onAvatarSelected($event)" hidden />
+            <span class="profile__avatar-upload-btn">
+              <mat-icon>photo_camera</mat-icon>
+              Change avatar
+            </span>
+          </label>
+          @if (avatarNote()) {
+            <p class="profile__avatar-note">{{ avatarNote() }}</p>
+          }
+        </div>
+      </div>
+
+      <dl class="profile__summary">
+        <div class="profile__summary-row">
+          <dt>Role</dt>
+          <dd>{{ user.role }}</dd>
+        </div>
+        <div class="profile__summary-row">
+          <dt>Joined</dt>
+          <dd>{{ user.joinedDate }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="profile__card">
+      <h2 class="profile__section-title">Edit Profile</h2>
+      <form [formGroup]="profileForm" (ngSubmit)="saveProfile()" class="profile__form" novalidate>
+        <div class="profile__row">
+          <div>
+            <mat-form-field appearance="outline" class="profile__field">
+              <mat-label>First name</mat-label>
+              <input matInput formControlName="firstName" required />
+            </mat-form-field>
+            <app-form-error [control]="profileForm.controls.firstName" label="First name" />
+          </div>
+          <div>
+            <mat-form-field appearance="outline" class="profile__field">
+              <mat-label>Last name</mat-label>
+              <input matInput formControlName="lastName" required />
+            </mat-form-field>
+            <app-form-error [control]="profileForm.controls.lastName" label="Last name" />
+          </div>
+        </div>
+
+        <mat-form-field appearance="outline" class="profile__field">
+          <mat-label>Email</mat-label>
+          <input matInput type="email" formControlName="email" required />
+        </mat-form-field>
+        <app-form-error [control]="profileForm.controls.email" label="Email" />
+
+        @if (profileError()) {
+          <div class="profile__error" role="alert">{{ profileError() }}</div>
+        }
+
+        <div class="profile__actions">
+          <button mat-flat-button color="primary" type="submit" [disabled]="savingProfile()">
+            {{ savingProfile() ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section class="profile__card">
+      <h2 class="profile__section-title">Change Password</h2>
+      <form [formGroup]="passwordForm" (ngSubmit)="changePassword()" class="profile__form" novalidate>
+        <mat-form-field appearance="outline" class="profile__field">
+          <mat-label>Current password</mat-label>
+          <input matInput type="password" formControlName="currentPassword" autocomplete="current-password" required />
+        </mat-form-field>
+        <app-form-error [control]="passwordForm.controls.currentPassword" label="Current password" />
+
+        <mat-form-field appearance="outline" class="profile__field">
+          <mat-label>New password</mat-label>
+          <input matInput type="password" formControlName="newPassword" autocomplete="new-password" required />
+        </mat-form-field>
+        <app-form-error [control]="passwordForm.controls.newPassword" label="New password" />
+
+        <mat-form-field appearance="outline" class="profile__field">
+          <mat-label>Confirm new password</mat-label>
+          <input matInput type="password" formControlName="confirmPassword" autocomplete="new-password" required />
+        </mat-form-field>
+        <app-form-error [control]="passwordForm.controls.confirmPassword" label="Confirm password" />
+
+        @if (passwordError()) {
+          <div class="profile__error" role="alert">{{ passwordError() }}</div>
+        }
+
+        <div class="profile__actions">
+          <button mat-flat-button color="primary" type="submit" [disabled]="savingPassword()">
+            {{ savingPassword() ? 'Saving...' : 'Change Password' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+}

@@ -117,4 +117,91 @@ describe('AuthService', () => {
         done();
       });
   });
+
+  it('updates the profile and reflects the change in currentUser', (done) => {
+    service
+      .login({ email: 'viewer@devboard.dev', password: 'Password123!', rememberMe: true })
+      .subscribe(() => {
+        service
+          .updateProfile({ firstName: 'Updated', lastName: 'Name', email: 'viewer@devboard.dev' })
+          .subscribe((updated) => {
+            expect(updated.firstName).toBe('Updated');
+            expect(service.currentUser()?.firstName).toBe('Updated');
+            done();
+          });
+      });
+  });
+
+  it('persists the updated profile to storage', (done) => {
+    service
+      .login({ email: 'viewer@devboard.dev', password: 'Password123!', rememberMe: true })
+      .subscribe(() => {
+        service
+          .updateProfile({ firstName: 'Persisted', lastName: 'Name', email: 'viewer@devboard.dev' })
+          .subscribe(() => {
+            const stored = JSON.parse(localStorage.getItem('devboard.auth.user') ?? '{}');
+            expect(stored.firstName).toBe('Persisted');
+            done();
+          });
+      });
+  });
+
+  it('rejects a profile update to an email already used by another account', (done) => {
+    service
+      .login({ email: 'viewer@devboard.dev', password: 'Password123!', rememberMe: true })
+      .subscribe(() => {
+        service
+          .updateProfile({ firstName: 'Viewer', lastName: 'User', email: 'admin@devboard.dev' })
+          .subscribe({
+            next: () => fail('expected updateProfile to error'),
+            error: (error: Error) => {
+              expect(error.message).toContain('already exists');
+              done();
+            },
+          });
+      });
+  });
+
+  it('allows a profile update that keeps the same email', (done) => {
+    service
+      .login({ email: 'viewer@devboard.dev', password: 'Password123!', rememberMe: true })
+      .subscribe(() => {
+        service
+          .updateProfile({ firstName: 'Viewer', lastName: 'Renamed', email: 'viewer@devboard.dev' })
+          .subscribe((updated) => {
+            expect(updated.lastName).toBe('Renamed');
+            done();
+          });
+      });
+  });
+
+  it('changes the password when the current password is correct', (done) => {
+    const email = `pwtest-${Date.now()}@devboard.dev`;
+    service
+      .register({ firstName: 'Pw', lastName: 'Test', email, password: 'Password123!' })
+      .subscribe(() => {
+        service.changePassword('Password123!', 'NewPassword456!').subscribe(() => {
+          service.logout();
+          service.login({ email, password: 'NewPassword456!', rememberMe: true }).subscribe((user) => {
+            expect(user.email).toBe(email);
+            done();
+          });
+        });
+      });
+  });
+
+  it('rejects a password change with the wrong current password', (done) => {
+    const email = `pwtest-wrong-${Date.now()}@devboard.dev`;
+    service
+      .register({ firstName: 'Pw', lastName: 'Test', email, password: 'Password123!' })
+      .subscribe(() => {
+        service.changePassword('WrongPassword!', 'NewPassword456!').subscribe({
+          next: () => fail('expected changePassword to error'),
+          error: (error: Error) => {
+            expect(error.message).toContain('incorrect');
+            done();
+          },
+        });
+      });
+  });
 });

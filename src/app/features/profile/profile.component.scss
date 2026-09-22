@@ -1,0 +1,125 @@
+.profile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--db-space-md);
+  max-width: 560px;
+}
+
+.profile__card {
+  background: var(--db-color-surface);
+  border: 1px solid var(--db-color-border);
+  border-radius: var(--db-radius-md);
+  padding: var(--db-space-lg);
+  box-shadow: var(--db-shadow-sm);
+}
+
+.profile__avatar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--db-space-md);
+  margin-bottom: var(--db-space-md);
+}
+
+.profile__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--db-color-primary);
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.profile__avatar-upload {
+  cursor: pointer;
+}
+
+.profile__avatar-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--db-color-primary);
+  font-weight: 500;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.profile__avatar-note {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--db-color-text-secondary);
+}
+
+.profile__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--db-space-md);
+  margin: 0;
+  padding-top: var(--db-space-md);
+  border-top: 1px solid var(--db-color-border);
+}
+
+.profile__summary-row {
+  display: flex;
+  flex-direction: column;
+
+  dt {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--db-color-text-secondary);
+  }
+
+  dd {
+    margin: 2px 0 0;
+    font-size: 0.9rem;
+    color: var(--db-color-text-primary);
+  }
+}
+
+.profile__section-title {
+  margin: 0 0 var(--db-space-md);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.profile__form {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile__field {
+  width: 100%;
+}
+
+.profile__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--db-space-md);
+}
+
+.profile__error {
+  background: color-mix(in srgb, var(--db-color-danger) 10%, transparent);
+  color: var(--db-color-danger);
+  border-radius: var(--db-radius-sm);
+  padding: var(--db-space-sm) var(--db-space-md);
+  font-size: 0.85rem;
+  margin-bottom: var(--db-space-md);
+}
+
+.profile__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--db-space-sm);
+}

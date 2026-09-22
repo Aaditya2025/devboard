@@ -1,0 +1,88 @@
+<app-page-header title="Settings" subtitle="Manage your preferences." />
+
+<div class="settings">
+  <section class="settings__card">
+    <h2 class="settings__section-title">Account</h2>
+    @if (currentUser(); as user) {
+      <div class="settings__account-row">
+        <span class="settings__account-email">{{ user.email }}</span>
+        <span class="settings__account-role">{{ user.role }}</span>
+      </div>
+    }
+    <a mat-stroked-button color="primary" routerLink="/profile" class="settings__account-link">
+      Edit profile
+    </a>
+  </section>
+
+  <section class="settings__card">
+    <h2 class="settings__section-title">Appearance</h2>
+    <div class="settings__toggle-row">
+      <div>
+        <span class="settings__toggle-label">Dark mode</span>
+        <p class="settings__toggle-hint">Switch the app to a dark color theme.</p>
+      </div>
+      <mat-slide-toggle
+        [checked]="darkMode()"
+        (change)="toggleDarkMode($event.checked)"
+      />
+    </div>
+  </section>
+
+  <section class="settings__card">
+    <h2 class="settings__section-title">Notifications</h2>
+    <div class="settings__toggle-row">
+      <div>
+        <span class="settings__toggle-label">Email notifications</span>
+        <p class="settings__toggle-hint">Receive a summary of activity by email.</p>
+      </div>
+      <mat-slide-toggle
+        [checked]="notificationPreferences().email"
+        (change)="toggleNotificationPreference('email', $event.checked)"
+      />
+    </div>
+    <div class="settings__toggle-row">
+      <div>
+        <span class="settings__toggle-label">Issue assignment notifications</span>
+        <p class="settings__toggle-hint">Get notified when an issue is assigned to you.</p>
+      </div>
+      <mat-slide-toggle
+        [checked]="notificationPreferences().issueAssignment"
+        (change)="toggleNotificationPreference('issueAssignment', $event.checked)"
+      />
+    </div>
+    <div class="settings__toggle-row">
+      <div>
+        <span class="settings__toggle-label">Comment notifications</span>
+        <p class="settings__toggle-hint">Get notified about new comments on your issues.</p>
+      </div>
+      <mat-slide-toggle
+        [checked]="notificationPreferences().comments"
+        (change)="toggleNotificationPreference('comments', $event.checked)"
+      />
+    </div>
+  </section>
+
+  <section class="settings__card">
+    <h2 class="settings__section-title">Security</h2>
+    <div class="settings__toggle-row">
+      <div>
+        <span class="settings__toggle-label">Password</span>
+        <p class="settings__toggle-hint">Change your password from your profile page.</p>
+      </div>
+      <a mat-stroked-button color="primary" routerLink="/profile">Change password</a>
+    </div>
+    <div class="settings__toggle-row">
+      <div>
+        <span class="settings__toggle-label">Sessions</span>
+        <p class="settings__toggle-hint">Sign out of DevBoard on all other devices.</p>
+      </div>
+      <button mat-stroked-button type="button" (click)="signOutAllDevices()">
+        <mat-icon>logout</mat-icon>
+        Sign out everywhere
+      </button>
+    </div>
+    @if (securityNote()) {
+      <p class="settings__note">{{ securityNote() }}</p>
+    }
+  </section>
+</div>

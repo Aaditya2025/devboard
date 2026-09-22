@@ -1,0 +1,73 @@
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--db-space-md);
+  max-width: 560px;
+}
+
+.settings__card {
+  background: var(--db-color-surface);
+  border: 1px solid var(--db-color-border);
+  border-radius: var(--db-radius-md);
+  padding: var(--db-space-lg);
+  box-shadow: var(--db-shadow-sm);
+}
+
+.settings__section-title {
+  margin: 0 0 var(--db-space-md);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--db-color-text-primary);
+}
+
+.settings__account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--db-space-md);
+  margin-bottom: var(--db-space-md);
+  border-bottom: 1px solid var(--db-color-border);
+}
+
+.settings__account-email {
+  font-size: 0.9rem;
+  color: var(--db-color-text-primary);
+}
+
+.settings__account-role {
+  font-size: 0.75rem;
+  color: var(--db-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.settings__toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--db-space-md);
+  padding: var(--db-space-sm) 0;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--db-color-border);
+  }
+}
+
+.settings__toggle-label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--db-color-text-primary);
+}
+
+.settings__toggle-hint {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--db-color-text-secondary);
+}
+
+.settings__note {
+  margin: var(--db-space-sm) 0 0;
+  font-size: 0.8rem;
+  color: var(--db-color-text-secondary);
+}

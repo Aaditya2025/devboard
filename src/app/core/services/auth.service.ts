@@ -17,6 +17,12 @@ export interface RegisterPayload {
   password: string;
 }
 
+export interface UpdateProfilePayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
 const TOKEN_KEY = 'devboard.auth.token';
 const USER_KEY = 'devboard.auth.user';
 /** Simulated network latency so loading states are visible/testable on mock data. */
@@ -99,6 +105,62 @@ export class AuthService {
     sessionStorage.removeItem(USER_KEY);
   }
 
+  updateProfile(payload: UpdateProfilePayload): Observable<User> {
+    return new Observable<User>((subscriber) => {
+      const timeout = setTimeout(() => {
+        const current = this.currentUserSignal();
+        if (!current) {
+          subscriber.error(new Error('Not signed in.'));
+          return;
+        }
+        const emailTaken = MOCK_USERS.some(
+          (u) => u.id !== current.id && u.email === payload.email,
+        );
+        if (emailTaken) {
+          subscriber.error(new Error('An account with this email already exists.'));
+          return;
+        }
+
+        const index = MOCK_USERS.findIndex((u) => u.id === current.id);
+        const updated: User = { ...current, ...payload };
+        if (index !== -1) {
+          MOCK_USERS[index] = updated;
+        }
+        // Credentials are keyed by email — move the entry if the email changed.
+        if (payload.email !== current.email) {
+          MOCK_CREDENTIALS[payload.email] = MOCK_CREDENTIALS[current.email];
+          delete MOCK_CREDENTIALS[current.email];
+        }
+
+        this.currentUserSignal.set(updated);
+        this.persistUpdatedUser(updated);
+        subscriber.next(updated);
+        subscriber.complete();
+      }, MOCK_LATENCY_MS);
+      return () => clearTimeout(timeout);
+    });
+  }
+
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    return new Observable<void>((subscriber) => {
+      const timeout = setTimeout(() => {
+        const current = this.currentUserSignal();
+        if (!current) {
+          subscriber.error(new Error('Not signed in.'));
+          return;
+        }
+        if (MOCK_CREDENTIALS[current.email] !== currentPassword) {
+          subscriber.error(new Error('Current password is incorrect.'));
+          return;
+        }
+        MOCK_CREDENTIALS[current.email] = newPassword;
+        subscriber.next();
+        subscriber.complete();
+      }, MOCK_LATENCY_MS);
+      return () => clearTimeout(timeout);
+    });
+  }
+
   private setSession(user: User, token: string, rememberMe: boolean): void {
     this.currentUserSignal.set(user);
     this.tokenSignal.set(token);
@@ -106,6 +168,17 @@ export class AuthService {
     const storage = rememberMe ? localStorage : sessionStorage;
     storage.setItem(TOKEN_KEY, token);
     storage.setItem(USER_KEY, JSON.stringify(user));
+  }
+
+  private persistUpdatedUser(user: User): void {
+    // Update whichever storage currently holds the session (set at login
+    // time by "remember me") rather than assuming one or the other.
+    if (localStorage.getItem(USER_KEY)) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+    }
+    if (sessionStorage.getItem(USER_KEY)) {
+      sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+    }
   }
 
   private restoreUser(): User | null {
