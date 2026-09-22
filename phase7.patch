@@ -1,0 +1,815 @@
+diff --git a/README.md b/README.md
+index 3c32c17..9070342 100644
+--- a/README.md
++++ b/README.md
+@@ -18,8 +18,8 @@ API later without UI rewrites.
+ - Profile and settings
+ - Responsive layout (desktop, tablet, mobile) with light/dark theming groundwork
+ 
+-> **Status:** Phases 1–6 (Foundation, Layout, Authentication, Dashboard, Projects, Issues)
+-> complete. See
++> **Status:** Phases 1–7 (Foundation, Layout, Authentication, Dashboard, Projects, Issues,
++> Kanban) complete. See
+ > [Project Structure](#project-structure) and [Frontend Development Phases](#frontend-development-phases)
+ > below for what's implemented vs. planned.
+ >
+@@ -102,7 +102,7 @@ src/environments/    # apiBaseUrl, useMockData — swapped per build configurati
+ 4. **Dashboard** ✅ — statistics, charts, recent activity, assigned issues, project progress
+ 5. **Projects** ✅ — list, details, create/edit, members
+ 6. **Issues** ✅ — list, create/edit, details, comments, activity, search/filter/sort/pagination
+-7. **Kanban** — board, columns, drag-and-drop, filtering
++7. **Kanban** ✅ — board, columns, drag-and-drop, filtering
+ 8. **Notifications** — center, unread count, mark read/all read
+ 9. **Profile/Settings** — profile, password, preferences
+ 10. **Quality** — loading/error/empty states, responsive design, accessibility, tests, linting
+diff --git a/src/app/core/services/issue.service.spec.ts b/src/app/core/services/issue.service.spec.ts
+index 2f46aeb..dfbd471 100644
+--- a/src/app/core/services/issue.service.spec.ts
++++ b/src/app/core/services/issue.service.spec.ts
+@@ -108,6 +108,33 @@ describe('IssueService', () => {
+     });
+   });
+ 
++  describe('getAllFiltered', () => {
++    it('returns every matching issue with no pagination applied', (done) => {
++      service.getAllFiltered({}).subscribe((issues) => {
++        service.getAll().subscribe((all) => {
++          expect(issues.length).toBe(all.length);
++          done();
++        });
++      });
++    });
++
++    it('applies search/project/assignee/priority filters', (done) => {
++      service.getAllFiltered({ projectId: 'proj-1' }).subscribe((issues) => {
++        expect(issues.length).toBeGreaterThan(0);
++        expect(issues.every((issue) => issue.projectId === 'proj-1')).toBe(true);
++        done();
++      });
++    });
++
++    it('returns issues across every status, suitable for grouping into Kanban columns', (done) => {
++      service.getAllFiltered({}).subscribe((issues) => {
++        const statuses = new Set(issues.map((i) => i.status));
++        expect(statuses.size).toBeGreaterThan(1);
++        done();
++      });
++    });
++  });
++
+   describe('CRUD', () => {
+     it('creates an issue with a generated key based on the project prefix', (done) => {
+       service
+@@ -130,27 +157,53 @@ describe('IssueService', () => {
+     });
+ 
+     it('updates only the provided fields', (done) => {
+-      service.getAll().subscribe((issues) => {
+-        const target = issues[0];
+-        service.update(target.id, { title: 'Updated title only' }).subscribe((updated) => {
+-          expect(updated.title).toBe('Updated title only');
+-          expect(updated.status).toBe(target.status);
+-          expect(updated.priority).toBe(target.priority);
+-          done();
++      service
++        .create({
++          title: 'Original title',
++          description: '',
++          projectId: 'proj-1',
++          status: IssueStatus.Todo,
++          priority: IssuePriority.Medium,
++          assigneeId: null,
++          labelIds: [],
++          sprintId: null,
++          dueDate: null,
++        })
++        .subscribe((created) => {
++          service.update(created.id, { title: 'Updated title only' }).subscribe((updated) => {
++            expect(updated.title).toBe('Updated title only');
++            expect(updated.status).toBe(created.status);
++            expect(updated.priority).toBe(created.priority);
++            done();
++          });
+         });
+-      });
+     });
+ 
+     it('deletes an issue', (done) => {
+-      service.getAll().subscribe((issuesBefore) => {
+-        const target = issuesBefore[0];
+-        service.delete(target.id).subscribe(() => {
+-          service.getById(target.id).subscribe((found) => {
+-            expect(found).toBeUndefined();
+-            done();
++      // Deletes a throwaway issue created just for this test, rather than
++      // an existing seed issue — Jasmine's default random spec order means
++      // another test (e.g. a search-by-title test) could otherwise run
++      // after this one and find its expected seed data already gone.
++      service
++        .create({
++          title: 'Issue to delete',
++          description: '',
++          projectId: 'proj-1',
++          status: IssueStatus.Backlog,
++          priority: IssuePriority.Low,
++          assigneeId: null,
++          labelIds: [],
++          sprintId: null,
++          dueDate: null,
++        })
++        .subscribe((created) => {
++          service.delete(created.id).subscribe(() => {
++            service.getById(created.id).subscribe((found) => {
++              expect(found).toBeUndefined();
++              done();
++            });
+           });
+         });
+-      });
+     });
+   });
+ });
+diff --git a/src/app/core/services/issue.service.ts b/src/app/core/services/issue.service.ts
+index dec1beb..6a58ede 100644
+--- a/src/app/core/services/issue.service.ts
++++ b/src/app/core/services/issue.service.ts
+@@ -47,27 +47,7 @@ export class IssueService {
+ 
+   getFiltered(filters: IssueFilters): Observable<PaginationResponse<Issue>> {
+     return delayed(() => {
+-      let items = [...MOCK_ISSUES];
+-
+-      if (filters.search) {
+-        const term = filters.search.trim().toLowerCase();
+-        items = items.filter(
+-          (issue) =>
+-            issue.title.toLowerCase().includes(term) || issue.key.toLowerCase().includes(term),
+-        );
+-      }
+-      if (filters.status) {
+-        items = items.filter((issue) => issue.status === filters.status);
+-      }
+-      if (filters.priority) {
+-        items = items.filter((issue) => issue.priority === filters.priority);
+-      }
+-      if (filters.assigneeId) {
+-        items = items.filter((issue) => issue.assigneeId === filters.assigneeId);
+-      }
+-      if (filters.projectId) {
+-        items = items.filter((issue) => issue.projectId === filters.projectId);
+-      }
++      let items = this.applyFilters(filters);
+ 
+       if (filters.sortBy) {
+         const sortBy = filters.sortBy;
+@@ -98,6 +78,41 @@ export class IssueService {
+     });
+   }
+ 
++  /**
++   * Search/project/assignee/priority filtering with no sort or pagination —
++   * used by the Kanban board, which groups every matching issue by status
++   * into columns rather than paging through them.
++   */
++  getAllFiltered(filters: Omit<IssueFilters, 'status' | 'page' | 'pageSize' | 'sortBy' | 'sortDirection'>): Observable<Issue[]> {
++    return delayed(() => this.applyFilters(filters));
++  }
++
++  private applyFilters(filters: IssueFilters): Issue[] {
++    let items = [...MOCK_ISSUES];
++
++    if (filters.search) {
++      const term = filters.search.trim().toLowerCase();
++      items = items.filter(
++        (issue) =>
++          issue.title.toLowerCase().includes(term) || issue.key.toLowerCase().includes(term),
++      );
++    }
++    if (filters.status) {
++      items = items.filter((issue) => issue.status === filters.status);
++    }
++    if (filters.priority) {
++      items = items.filter((issue) => issue.priority === filters.priority);
++    }
++    if (filters.assigneeId) {
++      items = items.filter((issue) => issue.assigneeId === filters.assigneeId);
++    }
++    if (filters.projectId) {
++      items = items.filter((issue) => issue.projectId === filters.projectId);
++    }
++
++    return items;
++  }
++
+   create(payload: CreateIssuePayload): Observable<Issue> {
+     return delayed(() => {
+       const now = new Date().toISOString().slice(0, 10);
+diff --git a/src/app/features/kanban/kanban.component.html b/src/app/features/kanban/kanban.component.html
+new file mode 100644
+index 0000000..3f1ab25
+--- /dev/null
++++ b/src/app/features/kanban/kanban.component.html
+@@ -0,0 +1,85 @@
++<app-page-header title="Kanban" subtitle="Drag issues between columns to update their status.">
++  <button mat-flat-button color="primary" type="button" routerLink="/issues/new">
++    <mat-icon>add</mat-icon>
++    New Issue
++  </button>
++</app-page-header>
++
++<div class="kanban__filters">
++  <app-search-input placeholder="Search by title or key..." (searchChange)="onSearch($event)" />
++
++  <mat-form-field appearance="outline" class="kanban__filter-field">
++    <mat-label>Project</mat-label>
++    <mat-select (selectionChange)="onProjectChange($event.value)">
++      <mat-option [value]="null">All</mat-option>
++      @for (project of projects(); track project.id) {
++        <mat-option [value]="project.id">{{ project.name }}</mat-option>
++      }
++    </mat-select>
++  </mat-form-field>
++
++  <mat-form-field appearance="outline" class="kanban__filter-field">
++    <mat-label>Assignee</mat-label>
++    <mat-select (selectionChange)="onAssigneeChange($event.value)">
++      <mat-option [value]="null">All</mat-option>
++      @for (user of users(); track user.id) {
++        <mat-option [value]="user.id">{{ user.firstName }} {{ user.lastName }}</mat-option>
++      }
++    </mat-select>
++  </mat-form-field>
++
++  <mat-form-field appearance="outline" class="kanban__filter-field">
++    <mat-label>Priority</mat-label>
++    <mat-select (selectionChange)="onPriorityChange($event.value)">
++      <mat-option [value]="null">All</mat-option>
++      @for (priority of priorityOptions; track priority) {
++        <mat-option [value]="priority">{{ priority }}</mat-option>
++      }
++    </mat-select>
++  </mat-form-field>
++</div>
++
++@if (loading()) {
++  <app-loading-spinner message="Loading board..." />
++} @else if (error()) {
++  <app-error-state title="Something went wrong." [message]="error() ?? ''" (retry)="retry()" />
++} @else {
++  <div class="kanban-board" cdkDropListGroup>
++    @for (column of columnsMeta; track column.status) {
++      <div class="kanban-column">
++        <div class="kanban-column__header">
++          <span class="kanban-column__dot" [style.background]="'var(' + column.cssVar + ')'"></span>
++          <span class="kanban-column__label">{{ column.label }}</span>
++          <span class="kanban-column__count">{{ columnIssues(column.status).length }}</span>
++        </div>
++
++        <div
++          class="kanban-column__list"
++          [id]="column.status"
++          cdkDropList
++          [cdkDropListData]="columnIssues(column.status)"
++          [cdkDropListConnectedTo]="connectedDropListIds()"
++          (cdkDropListDropped)="drop($event, column.status)"
++        >
++          @for (issue of columnIssues(column.status); track issue.id) {
++            <a class="kanban-card" [routerLink]="['/issues', issue.id]" cdkDrag>
++              <div class="kanban-card__drag-preview" *cdkDragPreview>
++                <span class="kanban-card__key">{{ issue.key }}</span>
++                <span class="kanban-card__title">{{ issue.title }}</span>
++              </div>
++              <span class="kanban-card__key">{{ issue.key }}</span>
++              <p class="kanban-card__title">{{ issue.title }}</p>
++              <div class="kanban-card__footer">
++                <app-priority-badge [priority]="issue.priority" />
++                <span class="kanban-card__assignee">{{ assigneeName(issue) }}</span>
++              </div>
++            </a>
++          }
++          @if (columnIssues(column.status).length === 0) {
++            <p class="kanban-column__empty">No issues</p>
++          }
++        </div>
++      </div>
++    }
++  </div>
++}
+diff --git a/src/app/features/kanban/kanban.component.scss b/src/app/features/kanban/kanban.component.scss
+new file mode 100644
+index 0000000..51967cd
+--- /dev/null
++++ b/src/app/features/kanban/kanban.component.scss
+@@ -0,0 +1,158 @@
++.kanban__filters {
++  display: flex;
++  align-items: flex-start;
++  gap: var(--db-space-sm);
++  margin-bottom: var(--db-space-md);
++  flex-wrap: wrap;
++
++  app-search-input {
++    flex: 1 1 240px;
++    min-width: 200px;
++  }
++}
++
++.kanban__filter-field {
++  width: 160px;
++}
++
++.kanban-board {
++  display: flex;
++  gap: var(--db-space-md);
++  overflow-x: auto;
++  padding-bottom: var(--db-space-sm);
++  align-items: flex-start;
++}
++
++.kanban-column {
++  flex: 0 0 280px;
++  width: 280px;
++  display: flex;
++  flex-direction: column;
++  background: var(--db-color-surface-alt);
++  border-radius: var(--db-radius-md);
++  max-height: calc(100vh - 260px);
++}
++
++.kanban-column__header {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-xs);
++  padding: var(--db-space-sm) var(--db-space-md);
++  flex-shrink: 0;
++}
++
++.kanban-column__dot {
++  width: 8px;
++  height: 8px;
++  border-radius: 50%;
++  flex-shrink: 0;
++}
++
++.kanban-column__label {
++  font-size: 0.8rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++  text-transform: uppercase;
++  letter-spacing: 0.03em;
++}
++
++.kanban-column__count {
++  margin-left: auto;
++  font-size: 0.75rem;
++  color: var(--db-color-text-secondary);
++  background: var(--db-color-surface);
++  border-radius: 999px;
++  padding: 1px 8px;
++}
++
++.kanban-column__list {
++  flex: 1;
++  overflow-y: auto;
++  padding: 0 var(--db-space-sm) var(--db-space-sm);
++  display: flex;
++  flex-direction: column;
++  gap: var(--db-space-sm);
++  min-height: 60px;
++}
++
++.kanban-column__empty {
++  margin: var(--db-space-sm) 0 0;
++  text-align: center;
++  font-size: 0.78rem;
++  color: var(--db-color-text-disabled);
++}
++
++.kanban-card {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-sm);
++  padding: var(--db-space-sm);
++  text-decoration: none;
++  color: inherit;
++  cursor: grab;
++  box-shadow: var(--db-shadow-sm);
++
++  &:hover {
++    box-shadow: var(--db-shadow-md);
++  }
++
++  &.cdk-drag-preview {
++    box-shadow: var(--db-shadow-md);
++  }
++
++  &.cdk-drag-placeholder {
++    opacity: 0.3;
++  }
++}
++
++.kanban-card__drag-preview {
++  display: flex;
++  flex-direction: column;
++  gap: 2px;
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-sm);
++  padding: var(--db-space-sm);
++  box-shadow: var(--db-shadow-md);
++  width: 260px;
++}
++
++.kanban-card__key {
++  font-size: 0.72rem;
++  font-weight: 700;
++  color: var(--db-color-text-secondary);
++}
++
++.kanban-card__title {
++  margin: 0;
++  font-size: 0.82rem;
++  color: var(--db-color-text-primary);
++  line-height: 1.3;
++}
++
++.kanban-card__footer {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  margin-top: 2px;
++}
++
++.kanban-card__assignee {
++  font-size: 0.72rem;
++  color: var(--db-color-text-secondary);
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++  max-width: 110px;
++}
++
++.cdk-drag-animating {
++  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
++}
++
++.kanban-column__list.cdk-drop-list-dragging .kanban-card:not(.cdk-drag-placeholder) {
++  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
++}
+diff --git a/src/app/features/kanban/kanban.component.spec.ts b/src/app/features/kanban/kanban.component.spec.ts
+new file mode 100644
+index 0000000..98f6dc3
+--- /dev/null
++++ b/src/app/features/kanban/kanban.component.spec.ts
+@@ -0,0 +1,134 @@
++import { TestBed } from '@angular/core/testing';
++import { of, throwError } from 'rxjs';
++import { provideRouter } from '@angular/router';
++import { CdkDragDrop } from '@angular/cdk/drag-drop';
++import { KanbanComponent } from './kanban.component';
++import { IssueService } from '../../core/services/issue.service';
++import { ProjectService } from '../../core/services/project.service';
++import { UserService } from '../../core/services/user.service';
++import { IssuePriority, IssueStatus } from '../../core/enums';
++import { Issue } from '../../core/models';
++
++function makeIssue(id: string, status: IssueStatus): Issue {
++  return {
++    id,
++    key: `T-${id}`,
++    title: `Issue ${id}`,
++    description: '',
++    projectId: 'proj-1',
++    status,
++    priority: IssuePriority.Medium,
++    assigneeId: null,
++    reporterId: 'user-1',
++    labels: [],
++    sprintId: null,
++    createdDate: '2026-01-01',
++    updatedDate: '2026-01-01',
++    dueDate: null,
++  };
++}
++
++describe('KanbanComponent', () => {
++  function setup(issues: Issue[], updateImpl?: (id: string, patch: unknown) => unknown) {
++    const issueServiceStub = {
++      getAllFiltered: () => of(issues),
++      update: updateImpl ?? ((_id: string, patch: { status: IssueStatus }) =>
++        of({ ...issues[0], status: patch.status })),
++    };
++    const projectServiceStub = { getAll: () => of([]) };
++    const userServiceStub = { getAll: () => of([]) };
++
++    TestBed.configureTestingModule({
++      imports: [KanbanComponent],
++      providers: [
++        { provide: IssueService, useValue: issueServiceStub },
++        { provide: ProjectService, useValue: projectServiceStub },
++        { provide: UserService, useValue: userServiceStub },
++        provideRouter([]),
++      ],
++    });
++
++    return TestBed.createComponent(KanbanComponent).componentInstance;
++  }
++
++  it('groups loaded issues into their status columns', () => {
++    const issues = [
++      makeIssue('1', IssueStatus.Todo),
++      makeIssue('2', IssueStatus.Done),
++      makeIssue('3', IssueStatus.Todo),
++    ];
++    const component = setup(issues);
++
++    expect(component.columnIssues(IssueStatus.Todo).length).toBe(2);
++    expect(component.columnIssues(IssueStatus.Done).length).toBe(1);
++    expect(component.columnIssues(IssueStatus.Backlog).length).toBe(0);
++  });
++
++  it('persists the new status when a card is dragged to a different column', () => {
++    const issues = [makeIssue('1', IssueStatus.Todo)];
++    let capturedPatch: unknown = null;
++    const component = setup(issues, (_id, patch) => {
++      capturedPatch = patch;
++      return of({ ...issues[0], status: (patch as { status: IssueStatus }).status });
++    });
++
++    const todoList = component.columnIssues(IssueStatus.Todo);
++    const doneList = component.columnIssues(IssueStatus.Done);
++
++    const event = {
++      previousContainer: { data: todoList },
++      container: { data: doneList },
++      previousIndex: 0,
++      currentIndex: 0,
++    } as CdkDragDrop<Issue[]>;
++
++    component.drop(event, IssueStatus.Done);
++
++    expect(capturedPatch).toEqual({ status: IssueStatus.Done });
++    expect(component.columnIssues(IssueStatus.Done).length).toBe(1);
++    expect(component.columnIssues(IssueStatus.Todo).length).toBe(0);
++  });
++
++  it('rolls back the move if persisting the status change fails', () => {
++    const issues = [makeIssue('1', IssueStatus.Todo)];
++    const component = setup(issues, () => throwError(() => new Error('network error')));
++
++    const todoList = component.columnIssues(IssueStatus.Todo);
++    const doneList = component.columnIssues(IssueStatus.Done);
++
++    const event = {
++      previousContainer: { data: todoList },
++      container: { data: doneList },
++      previousIndex: 0,
++      currentIndex: 0,
++    } as CdkDragDrop<Issue[]>;
++
++    component.drop(event, IssueStatus.Done);
++
++    expect(component.columnIssues(IssueStatus.Done).length).toBe(0);
++    expect(component.columnIssues(IssueStatus.Todo).length).toBe(1);
++  });
++
++  it('reorders within the same column without calling the update API', () => {
++    const issues = [
++      makeIssue('1', IssueStatus.Todo),
++      makeIssue('2', IssueStatus.Todo),
++    ];
++    const updateSpy = jasmine.createSpy('update');
++    const component = setup(issues, updateSpy);
++
++    const todoList = component.columnIssues(IssueStatus.Todo);
++    const container = { data: todoList };
++    const event = {
++      previousContainer: container,
++      container,
++      previousIndex: 0,
++      currentIndex: 1,
++    } as CdkDragDrop<Issue[]>;
++
++    component.drop(event, IssueStatus.Todo);
++
++    expect(updateSpy).not.toHaveBeenCalled();
++    expect(component.columnIssues(IssueStatus.Todo).map((i) => i.id)).toEqual(['2', '1']);
++  });
++});
+diff --git a/src/app/features/kanban/kanban.component.ts b/src/app/features/kanban/kanban.component.ts
+index 1bfc253..55b2e84 100644
+--- a/src/app/features/kanban/kanban.component.ts
++++ b/src/app/features/kanban/kanban.component.ts
+@@ -1,9 +1,206 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
++import { RouterLink } from '@angular/router';
++import {
++  CdkDragDrop,
++  DragDropModule,
++  moveItemInArray,
++  transferArrayItem,
++} from '@angular/cdk/drag-drop';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { MatFormFieldModule } from '@angular/material/form-field';
++import { MatSelectModule } from '@angular/material/select';
++import { MatSnackBar } from '@angular/material/snack-bar';
++import { IssuePriority, IssueStatus } from '../../core/enums';
++import { IssueService } from '../../core/services/issue.service';
++import { ProjectService } from '../../core/services/project.service';
++import { UserService } from '../../core/services/user.service';
++import { Issue, IssueFilters, Project, User } from '../../core/models';
++import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
++import { SearchInputComponent } from '../../shared/components/search-input/search-input.component';
++import { PriorityBadgeComponent } from '../../shared/components/priority-badge/priority-badge.component';
++import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner.component';
++import { ErrorStateComponent } from '../../shared/components/error-state/error-state.component';
++
++interface KanbanColumn {
++  status: IssueStatus;
++  label: string;
++  cssVar: string;
++}
++
++const COLUMNS: KanbanColumn[] = [
++  { status: IssueStatus.Backlog, label: 'Backlog', cssVar: '--db-status-backlog' },
++  { status: IssueStatus.Todo, label: 'Todo', cssVar: '--db-status-todo' },
++  { status: IssueStatus.InProgress, label: 'In Progress', cssVar: '--db-status-in-progress' },
++  { status: IssueStatus.InReview, label: 'In Review', cssVar: '--db-status-in-review' },
++  { status: IssueStatus.Done, label: 'Done', cssVar: '--db-status-done' },
++];
++
++type BoardColumns = Record<IssueStatus, Issue[]>;
+ 
+ @Component({
+   selector: 'app-kanban',
+   standalone: true,
+-  template: `<p>Kanban board — drag and drop columns land here in Phase 7.</p>`,
++  imports: [
++    RouterLink,
++    DragDropModule,
++    MatButtonModule,
++    MatIconModule,
++    MatFormFieldModule,
++    MatSelectModule,
++    PageHeaderComponent,
++    SearchInputComponent,
++    PriorityBadgeComponent,
++    LoadingSpinnerComponent,
++    ErrorStateComponent,
++  ],
++  templateUrl: './kanban.component.html',
++  styleUrl: './kanban.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class KanbanComponent {}
++export class KanbanComponent {
++  private readonly issueService = inject(IssueService);
++  private readonly projectService = inject(ProjectService);
++  private readonly userService = inject(UserService);
++  private readonly snackBar = inject(MatSnackBar);
++
++  readonly columnsMeta = COLUMNS;
++  readonly priorityOptions = Object.values(IssuePriority);
++
++  readonly loading = signal(true);
++  readonly error = signal<string | null>(null);
++  readonly board = signal<BoardColumns>(this.emptyBoard());
++
++  readonly projects = signal<Project[]>([]);
++  readonly users = signal<User[]>([]);
++
++  private filters: Omit<IssueFilters, 'status' | 'page' | 'pageSize' | 'sortBy' | 'sortDirection'> = {};
++
++  constructor() {
++    this.projectService.getAll().subscribe((projects) => this.projects.set(projects));
++    this.userService.getAll().subscribe((users) => this.users.set(users));
++    this.load();
++  }
++
++  retry(): void {
++    this.load();
++  }
++
++  onSearch(search: string): void {
++    this.filters = { ...this.filters, search: search || undefined };
++    this.load();
++  }
++
++  onProjectChange(projectId: string | null): void {
++    this.filters = { ...this.filters, projectId };
++    this.load();
++  }
++
++  onAssigneeChange(assigneeId: string | null): void {
++    this.filters = { ...this.filters, assigneeId };
++    this.load();
++  }
++
++  onPriorityChange(priority: IssuePriority | null): void {
++    this.filters = { ...this.filters, priority };
++    this.load();
++  }
++
++  columnIssues(status: IssueStatus): Issue[] {
++    return this.board()[status];
++  }
++
++  connectedDropListIds(): string[] {
++    return this.columnsMeta.map((c) => c.status);
++  }
++
++  assigneeName(issue: Issue): string {
++    if (!issue.assigneeId) {
++      return 'Unassigned';
++    }
++    const user = this.users().find((u) => u.id === issue.assigneeId);
++    return user ? `${user.firstName} ${user.lastName}` : 'Unassigned';
++  }
++
++  drop(event: CdkDragDrop<Issue[]>, targetStatus: IssueStatus): void {
++    if (event.previousContainer === event.container) {
++      // Same column — purely a visual reorder. There's no persisted
++      // "position" field on Issue (yet), so this only affects the current
++      // session, not what gets sent to the backend.
++      moveItemInArray(event.container.data, event.previousIndex, event.currentIndex);
++      this.board.update((board) => ({ ...board }));
++      return;
++    }
++
++    const issue = event.previousContainer.data[event.previousIndex];
++    const previousStatus = issue.status;
++
++    // Optimistic move: update the board immediately so the drag feels
++    // instant, then persist the status change and roll back on failure.
++    transferArrayItem(
++      event.previousContainer.data,
++      event.container.data,
++      event.previousIndex,
++      event.currentIndex,
++    );
++    this.board.update((board) => ({ ...board }));
++
++    this.issueService.update(issue.id, { status: targetStatus }).subscribe({
++      next: (updated) => {
++        // Keep the moved card's own data in sync (e.g. updatedDate) without a full reload.
++        const column = this.board()[targetStatus];
++        const index = column.findIndex((i) => i.id === updated.id);
++        if (index !== -1) {
++          column[index] = updated;
++          this.board.update((board) => ({ ...board }));
++        }
++      },
++      error: () => {
++        // Roll back to the original column.
++        const targetColumn = this.board()[targetStatus];
++        const failedIndex = targetColumn.findIndex((i) => i.id === issue.id);
++        if (failedIndex !== -1) {
++          const [reverted] = targetColumn.splice(failedIndex, 1);
++          this.board()[previousStatus].splice(event.previousIndex, 0, reverted);
++          this.board.update((board) => ({ ...board }));
++        }
++        this.snackBar.open('Unable to move issue. Please try again.', undefined, {
++          duration: 3000,
++        });
++      },
++    });
++  }
++
++  private load(): void {
++    this.loading.set(true);
++    this.error.set(null);
++    this.issueService.getAllFiltered(this.filters).subscribe({
++      next: (issues) => {
++        this.board.set(this.groupByStatus(issues));
++        this.loading.set(false);
++      },
++      error: () => {
++        this.error.set("We couldn't load the board.");
++        this.loading.set(false);
++      },
++    });
++  }
++
++  private groupByStatus(issues: Issue[]): BoardColumns {
++    const board = this.emptyBoard();
++    for (const issue of issues) {
++      board[issue.status].push(issue);
++    }
++    return board;
++  }
++
++  private emptyBoard(): BoardColumns {
++    return {
++      [IssueStatus.Backlog]: [],
++      [IssueStatus.Todo]: [],
++      [IssueStatus.InProgress]: [],
++      [IssueStatus.InReview]: [],
++      [IssueStatus.Done]: [],
++    };
++  }
++}

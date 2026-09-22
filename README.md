@@ -18,8 +18,8 @@ API later without UI rewrites.
 - Profile and settings
 - Responsive layout (desktop, tablet, mobile) with light/dark theming groundwork
 
-> **Status:** Phases 1–7 (Foundation, Layout, Authentication, Dashboard, Projects, Issues,
-> Kanban) complete. See
+> **Status:** Phases 1–8 (Foundation, Layout, Authentication, Dashboard, Projects, Issues,
+> Kanban, Notifications) complete. See
 > [Project Structure](#project-structure) and [Frontend Development Phases](#frontend-development-phases)
 > below for what's implemented vs. planned.
 >
@@ -103,7 +103,7 @@ src/environments/    # apiBaseUrl, useMockData — swapped per build configurati
 5. **Projects** ✅ — list, details, create/edit, members
 6. **Issues** ✅ — list, create/edit, details, comments, activity, search/filter/sort/pagination
 7. **Kanban** ✅ — board, columns, drag-and-drop, filtering
-8. **Notifications** — center, unread count, mark read/all read
+8. **Notifications** ✅ — center, unread count, mark read/all read
 9. **Profile/Settings** — profile, password, preferences
 10. **Quality** — loading/error/empty states, responsive design, accessibility, tests, linting
 11. **Backend Integration Prep** — swap mock services for HTTP services

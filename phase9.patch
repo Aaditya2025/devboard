@@ -1,0 +1,1007 @@
+diff --git a/README.md b/README.md
+index 888e0d9..83fc243 100644
+--- a/README.md
++++ b/README.md
+@@ -18,8 +18,8 @@ API later without UI rewrites.
+ - Profile and settings
+ - Responsive layout (desktop, tablet, mobile) with light/dark theming groundwork
+ 
+-> **Status:** Phases 1–8 (Foundation, Layout, Authentication, Dashboard, Projects, Issues,
+-> Kanban, Notifications) complete. See
++> **Status:** Phases 1–9 (Foundation, Layout, Authentication, Dashboard, Projects, Issues,
++> Kanban, Notifications, Profile/Settings) complete. See
+ > [Project Structure](#project-structure) and [Frontend Development Phases](#frontend-development-phases)
+ > below for what's implemented vs. planned.
+ >
+@@ -104,7 +104,7 @@ src/environments/    # apiBaseUrl, useMockData — swapped per build configurati
+ 6. **Issues** ✅ — list, create/edit, details, comments, activity, search/filter/sort/pagination
+ 7. **Kanban** ✅ — board, columns, drag-and-drop, filtering
+ 8. **Notifications** ✅ — center, unread count, mark read/all read
+-9. **Profile/Settings** — profile, password, preferences
++9. **Profile/Settings** ✅ — profile, password, preferences
+ 10. **Quality** — loading/error/empty states, responsive design, accessibility, tests, linting
+ 11. **Backend Integration Prep** — swap mock services for HTTP services
+ 
+diff --git a/src/app/app.component.ts b/src/app/app.component.ts
+index 69d88fe..c6b4ccd 100644
+--- a/src/app/app.component.ts
++++ b/src/app/app.component.ts
+@@ -1,5 +1,6 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+ import { RouterOutlet } from '@angular/router';
++import { SettingsService } from './core/services/settings.service';
+ 
+ @Component({
+   selector: 'app-root',
+@@ -9,4 +10,10 @@ import { RouterOutlet } from '@angular/router';
+   styleUrl: './app.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class AppComponent {}
++export class AppComponent {
++  // Injected here (rather than only where Settings is used) purely to force
++  // eager instantiation — SettingsService's constructor applies the saved
++  // dark-mode preference immediately, before first paint, not only once
++  // someone happens to visit /settings.
++  private readonly settingsService = inject(SettingsService);
++}
+diff --git a/src/app/core/services/auth.service.spec.ts b/src/app/core/services/auth.service.spec.ts
+index f0861dd..0bc2e11 100644
+--- a/src/app/core/services/auth.service.spec.ts
++++ b/src/app/core/services/auth.service.spec.ts
+@@ -117,4 +117,91 @@ describe('AuthService', () => {
+         done();
+       });
+   });
++
++  it('updates the profile and reflects the change in currentUser', (done) => {
++    service
++      .login({ email: 'viewer@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        service
++          .updateProfile({ firstName: 'Updated', lastName: 'Name', email: 'viewer@devboard.dev' })
++          .subscribe((updated) => {
++            expect(updated.firstName).toBe('Updated');
++            expect(service.currentUser()?.firstName).toBe('Updated');
++            done();
++          });
++      });
++  });
++
++  it('persists the updated profile to storage', (done) => {
++    service
++      .login({ email: 'viewer@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        service
++          .updateProfile({ firstName: 'Persisted', lastName: 'Name', email: 'viewer@devboard.dev' })
++          .subscribe(() => {
++            const stored = JSON.parse(localStorage.getItem('devboard.auth.user') ?? '{}');
++            expect(stored.firstName).toBe('Persisted');
++            done();
++          });
++      });
++  });
++
++  it('rejects a profile update to an email already used by another account', (done) => {
++    service
++      .login({ email: 'viewer@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        service
++          .updateProfile({ firstName: 'Viewer', lastName: 'User', email: 'admin@devboard.dev' })
++          .subscribe({
++            next: () => fail('expected updateProfile to error'),
++            error: (error: Error) => {
++              expect(error.message).toContain('already exists');
++              done();
++            },
++          });
++      });
++  });
++
++  it('allows a profile update that keeps the same email', (done) => {
++    service
++      .login({ email: 'viewer@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        service
++          .updateProfile({ firstName: 'Viewer', lastName: 'Renamed', email: 'viewer@devboard.dev' })
++          .subscribe((updated) => {
++            expect(updated.lastName).toBe('Renamed');
++            done();
++          });
++      });
++  });
++
++  it('changes the password when the current password is correct', (done) => {
++    const email = `pwtest-${Date.now()}@devboard.dev`;
++    service
++      .register({ firstName: 'Pw', lastName: 'Test', email, password: 'Password123!' })
++      .subscribe(() => {
++        service.changePassword('Password123!', 'NewPassword456!').subscribe(() => {
++          service.logout();
++          service.login({ email, password: 'NewPassword456!', rememberMe: true }).subscribe((user) => {
++            expect(user.email).toBe(email);
++            done();
++          });
++        });
++      });
++  });
++
++  it('rejects a password change with the wrong current password', (done) => {
++    const email = `pwtest-wrong-${Date.now()}@devboard.dev`;
++    service
++      .register({ firstName: 'Pw', lastName: 'Test', email, password: 'Password123!' })
++      .subscribe(() => {
++        service.changePassword('WrongPassword!', 'NewPassword456!').subscribe({
++          next: () => fail('expected changePassword to error'),
++          error: (error: Error) => {
++            expect(error.message).toContain('incorrect');
++            done();
++          },
++        });
++      });
++  });
+ });
+diff --git a/src/app/core/services/auth.service.ts b/src/app/core/services/auth.service.ts
+index 3baf644..c5bcf65 100644
+--- a/src/app/core/services/auth.service.ts
++++ b/src/app/core/services/auth.service.ts
+@@ -17,6 +17,12 @@ export interface RegisterPayload {
+   password: string;
+ }
+ 
++export interface UpdateProfilePayload {
++  firstName: string;
++  lastName: string;
++  email: string;
++}
++
+ const TOKEN_KEY = 'devboard.auth.token';
+ const USER_KEY = 'devboard.auth.user';
+ /** Simulated network latency so loading states are visible/testable on mock data. */
+@@ -99,6 +105,62 @@ export class AuthService {
+     sessionStorage.removeItem(USER_KEY);
+   }
+ 
++  updateProfile(payload: UpdateProfilePayload): Observable<User> {
++    return new Observable<User>((subscriber) => {
++      const timeout = setTimeout(() => {
++        const current = this.currentUserSignal();
++        if (!current) {
++          subscriber.error(new Error('Not signed in.'));
++          return;
++        }
++        const emailTaken = MOCK_USERS.some(
++          (u) => u.id !== current.id && u.email === payload.email,
++        );
++        if (emailTaken) {
++          subscriber.error(new Error('An account with this email already exists.'));
++          return;
++        }
++
++        const index = MOCK_USERS.findIndex((u) => u.id === current.id);
++        const updated: User = { ...current, ...payload };
++        if (index !== -1) {
++          MOCK_USERS[index] = updated;
++        }
++        // Credentials are keyed by email — move the entry if the email changed.
++        if (payload.email !== current.email) {
++          MOCK_CREDENTIALS[payload.email] = MOCK_CREDENTIALS[current.email];
++          delete MOCK_CREDENTIALS[current.email];
++        }
++
++        this.currentUserSignal.set(updated);
++        this.persistUpdatedUser(updated);
++        subscriber.next(updated);
++        subscriber.complete();
++      }, MOCK_LATENCY_MS);
++      return () => clearTimeout(timeout);
++    });
++  }
++
++  changePassword(currentPassword: string, newPassword: string): Observable<void> {
++    return new Observable<void>((subscriber) => {
++      const timeout = setTimeout(() => {
++        const current = this.currentUserSignal();
++        if (!current) {
++          subscriber.error(new Error('Not signed in.'));
++          return;
++        }
++        if (MOCK_CREDENTIALS[current.email] !== currentPassword) {
++          subscriber.error(new Error('Current password is incorrect.'));
++          return;
++        }
++        MOCK_CREDENTIALS[current.email] = newPassword;
++        subscriber.next();
++        subscriber.complete();
++      }, MOCK_LATENCY_MS);
++      return () => clearTimeout(timeout);
++    });
++  }
++
+   private setSession(user: User, token: string, rememberMe: boolean): void {
+     this.currentUserSignal.set(user);
+     this.tokenSignal.set(token);
+@@ -108,6 +170,17 @@ export class AuthService {
+     storage.setItem(USER_KEY, JSON.stringify(user));
+   }
+ 
++  private persistUpdatedUser(user: User): void {
++    // Update whichever storage currently holds the session (set at login
++    // time by "remember me") rather than assuming one or the other.
++    if (localStorage.getItem(USER_KEY)) {
++      localStorage.setItem(USER_KEY, JSON.stringify(user));
++    }
++    if (sessionStorage.getItem(USER_KEY)) {
++      sessionStorage.setItem(USER_KEY, JSON.stringify(user));
++    }
++  }
++
+   private restoreUser(): User | null {
+     const raw = localStorage.getItem(USER_KEY) ?? sessionStorage.getItem(USER_KEY);
+     if (!raw) {
+diff --git a/src/app/core/services/settings.service.spec.ts b/src/app/core/services/settings.service.spec.ts
+new file mode 100644
+index 0000000..18a962e
+--- /dev/null
++++ b/src/app/core/services/settings.service.spec.ts
+@@ -0,0 +1,82 @@
++import { TestBed } from '@angular/core/testing';
++import { SettingsService } from './settings.service';
++
++describe('SettingsService', () => {
++  let service: SettingsService;
++
++  beforeEach(() => {
++    localStorage.clear();
++    document.documentElement.removeAttribute('data-theme');
++    TestBed.configureTestingModule({});
++    service = TestBed.inject(SettingsService);
++  });
++
++  afterEach(() => {
++    localStorage.clear();
++    document.documentElement.removeAttribute('data-theme');
++  });
++
++  it('defaults to light mode with no stored preference', () => {
++    expect(service.darkMode()).toBe(false);
++    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
++  });
++
++  it('enables dark mode, persists it, and applies the data-theme attribute', () => {
++    service.setDarkMode(true);
++
++    expect(service.darkMode()).toBe(true);
++    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
++    expect(localStorage.getItem('devboard.settings.darkMode')).toBe('true');
++  });
++
++  it('restores a previously saved dark mode preference on construction', () => {
++    localStorage.setItem('devboard.settings.darkMode', 'true');
++
++    // Re-inject to simulate a fresh app load reading the stored preference.
++    TestBed.resetTestingModule();
++    TestBed.configureTestingModule({});
++    const freshService = TestBed.inject(SettingsService);
++
++    expect(freshService.darkMode()).toBe(true);
++    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
++  });
++
++  it('defaults every notification preference to true', () => {
++    expect(service.notificationPreferences()).toEqual({
++      email: true,
++      issueAssignment: true,
++      comments: true,
++    });
++  });
++
++  it('updates and persists a single notification preference without affecting the others', () => {
++    service.setNotificationPreference('comments', false);
++
++    expect(service.notificationPreferences()).toEqual({
++      email: true,
++      issueAssignment: true,
++      comments: false,
++    });
++
++    const stored = JSON.parse(localStorage.getItem('devboard.settings.notifications') ?? '{}');
++    expect(stored.comments).toBe(false);
++    expect(stored.email).toBe(true);
++  });
++
++  it('restores previously saved notification preferences on construction', () => {
++    localStorage.setItem(
++      'devboard.settings.notifications',
++      JSON.stringify({ email: false, issueAssignment: true, comments: false }),
++    );
++
++    TestBed.resetTestingModule();
++    TestBed.configureTestingModule({});
++    const freshService = TestBed.inject(SettingsService);
++
++    expect(freshService.notificationPreferences()).toEqual({
++      email: false,
++      issueAssignment: true,
++      comments: false,
++    });
++  });
++});
+diff --git a/src/app/core/services/settings.service.ts b/src/app/core/services/settings.service.ts
+new file mode 100644
+index 0000000..664f100
+--- /dev/null
++++ b/src/app/core/services/settings.service.ts
+@@ -0,0 +1,73 @@
++import { Injectable, signal } from '@angular/core';
++
++export interface NotificationPreferences {
++  email: boolean;
++  issueAssignment: boolean;
++  comments: boolean;
++}
++
++const DARK_MODE_KEY = 'devboard.settings.darkMode';
++const NOTIFICATION_PREFS_KEY = 'devboard.settings.notifications';
++
++const DEFAULT_NOTIFICATION_PREFS: NotificationPreferences = {
++  email: true,
++  issueAssignment: true,
++  comments: true,
++};
++
++/**
++ * Frontend-only preferences (spec: "Persist frontend-only preferences
++ * locally until the backend exists"). Everything here is read from and
++ * written to localStorage directly — there's no backend endpoint for
++ * settings yet, so unlike the other services this one has no mock HTTP
++ * latency to simulate; the "request" IS the local write.
++ *
++ * Instantiated eagerly in AppComponent (see app.component.ts) so dark mode
++ * applies before the first paint, not only once someone visits Settings.
++ */
++@Injectable({ providedIn: 'root' })
++export class SettingsService {
++  private readonly darkModeSignal = signal<boolean>(this.readDarkMode());
++  private readonly notificationPrefsSignal = signal<NotificationPreferences>(
++    this.readNotificationPrefs(),
++  );
++
++  readonly darkMode = this.darkModeSignal.asReadonly();
++  readonly notificationPreferences = this.notificationPrefsSignal.asReadonly();
++
++  constructor() {
++    this.applyTheme(this.darkModeSignal());
++  }
++
++  setDarkMode(enabled: boolean): void {
++    this.darkModeSignal.set(enabled);
++    localStorage.setItem(DARK_MODE_KEY, String(enabled));
++    this.applyTheme(enabled);
++  }
++
++  setNotificationPreference(key: keyof NotificationPreferences, value: boolean): void {
++    const next = { ...this.notificationPrefsSignal(), [key]: value };
++    this.notificationPrefsSignal.set(next);
++    localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(next));
++  }
++
++  private applyTheme(darkMode: boolean): void {
++    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
++  }
++
++  private readDarkMode(): boolean {
++    return localStorage.getItem(DARK_MODE_KEY) === 'true';
++  }
++
++  private readNotificationPrefs(): NotificationPreferences {
++    const raw = localStorage.getItem(NOTIFICATION_PREFS_KEY);
++    if (!raw) {
++      return DEFAULT_NOTIFICATION_PREFS;
++    }
++    try {
++      return { ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(raw) };
++    } catch {
++      return DEFAULT_NOTIFICATION_PREFS;
++    }
++  }
++}
+diff --git a/src/app/features/profile/profile.component.html b/src/app/features/profile/profile.component.html
+new file mode 100644
+index 0000000..167ceec
+--- /dev/null
++++ b/src/app/features/profile/profile.component.html
+@@ -0,0 +1,105 @@
++<app-page-header title="Profile" subtitle="Manage your account details." />
++
++@if (currentUser(); as user) {
++  <div class="profile">
++    <section class="profile__card">
++      <div class="profile__avatar-row">
++        <div class="profile__avatar">{{ initials() }}</div>
++        <div class="profile__avatar-actions">
++          <label class="profile__avatar-upload">
++            <input type="file" accept="image/*" (change)="onAvatarSelected($event)" hidden />
++            <span class="profile__avatar-upload-btn">
++              <mat-icon>photo_camera</mat-icon>
++              Change avatar
++            </span>
++          </label>
++          @if (avatarNote()) {
++            <p class="profile__avatar-note">{{ avatarNote() }}</p>
++          }
++        </div>
++      </div>
++
++      <dl class="profile__summary">
++        <div class="profile__summary-row">
++          <dt>Role</dt>
++          <dd>{{ user.role }}</dd>
++        </div>
++        <div class="profile__summary-row">
++          <dt>Joined</dt>
++          <dd>{{ user.joinedDate }}</dd>
++        </div>
++      </dl>
++    </section>
++
++    <section class="profile__card">
++      <h2 class="profile__section-title">Edit Profile</h2>
++      <form [formGroup]="profileForm" (ngSubmit)="saveProfile()" class="profile__form" novalidate>
++        <div class="profile__row">
++          <div>
++            <mat-form-field appearance="outline" class="profile__field">
++              <mat-label>First name</mat-label>
++              <input matInput formControlName="firstName" required />
++            </mat-form-field>
++            <app-form-error [control]="profileForm.controls.firstName" label="First name" />
++          </div>
++          <div>
++            <mat-form-field appearance="outline" class="profile__field">
++              <mat-label>Last name</mat-label>
++              <input matInput formControlName="lastName" required />
++            </mat-form-field>
++            <app-form-error [control]="profileForm.controls.lastName" label="Last name" />
++          </div>
++        </div>
++
++        <mat-form-field appearance="outline" class="profile__field">
++          <mat-label>Email</mat-label>
++          <input matInput type="email" formControlName="email" required />
++        </mat-form-field>
++        <app-form-error [control]="profileForm.controls.email" label="Email" />
++
++        @if (profileError()) {
++          <div class="profile__error" role="alert">{{ profileError() }}</div>
++        }
++
++        <div class="profile__actions">
++          <button mat-flat-button color="primary" type="submit" [disabled]="savingProfile()">
++            {{ savingProfile() ? 'Saving...' : 'Save Changes' }}
++          </button>
++        </div>
++      </form>
++    </section>
++
++    <section class="profile__card">
++      <h2 class="profile__section-title">Change Password</h2>
++      <form [formGroup]="passwordForm" (ngSubmit)="changePassword()" class="profile__form" novalidate>
++        <mat-form-field appearance="outline" class="profile__field">
++          <mat-label>Current password</mat-label>
++          <input matInput type="password" formControlName="currentPassword" autocomplete="current-password" required />
++        </mat-form-field>
++        <app-form-error [control]="passwordForm.controls.currentPassword" label="Current password" />
++
++        <mat-form-field appearance="outline" class="profile__field">
++          <mat-label>New password</mat-label>
++          <input matInput type="password" formControlName="newPassword" autocomplete="new-password" required />
++        </mat-form-field>
++        <app-form-error [control]="passwordForm.controls.newPassword" label="New password" />
++
++        <mat-form-field appearance="outline" class="profile__field">
++          <mat-label>Confirm new password</mat-label>
++          <input matInput type="password" formControlName="confirmPassword" autocomplete="new-password" required />
++        </mat-form-field>
++        <app-form-error [control]="passwordForm.controls.confirmPassword" label="Confirm password" />
++
++        @if (passwordError()) {
++          <div class="profile__error" role="alert">{{ passwordError() }}</div>
++        }
++
++        <div class="profile__actions">
++          <button mat-flat-button color="primary" type="submit" [disabled]="savingPassword()">
++            {{ savingPassword() ? 'Saving...' : 'Change Password' }}
++          </button>
++        </div>
++      </form>
++    </section>
++  </div>
++}
+diff --git a/src/app/features/profile/profile.component.scss b/src/app/features/profile/profile.component.scss
+new file mode 100644
+index 0000000..7af5cfc
+--- /dev/null
++++ b/src/app/features/profile/profile.component.scss
+@@ -0,0 +1,125 @@
++.profile {
++  display: flex;
++  flex-direction: column;
++  gap: var(--db-space-md);
++  max-width: 560px;
++}
++
++.profile__card {
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  padding: var(--db-space-lg);
++  box-shadow: var(--db-shadow-sm);
++}
++
++.profile__avatar-row {
++  display: flex;
++  align-items: center;
++  gap: var(--db-space-md);
++  margin-bottom: var(--db-space-md);
++}
++
++.profile__avatar {
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  width: 64px;
++  height: 64px;
++  border-radius: 50%;
++  background: var(--db-color-primary);
++  color: #fff;
++  font-size: 1.3rem;
++  font-weight: 600;
++  flex-shrink: 0;
++}
++
++.profile__avatar-upload {
++  cursor: pointer;
++}
++
++.profile__avatar-upload-btn {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  font-size: 0.85rem;
++  color: var(--db-color-primary);
++  font-weight: 500;
++
++  mat-icon {
++    font-size: 18px;
++    width: 18px;
++    height: 18px;
++  }
++}
++
++.profile__avatar-note {
++  margin: 4px 0 0;
++  font-size: 0.78rem;
++  color: var(--db-color-text-secondary);
++}
++
++.profile__summary {
++  display: grid;
++  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
++  gap: var(--db-space-md);
++  margin: 0;
++  padding-top: var(--db-space-md);
++  border-top: 1px solid var(--db-color-border);
++}
++
++.profile__summary-row {
++  display: flex;
++  flex-direction: column;
++
++  dt {
++    font-size: 0.72rem;
++    font-weight: 600;
++    text-transform: uppercase;
++    letter-spacing: 0.03em;
++    color: var(--db-color-text-secondary);
++  }
++
++  dd {
++    margin: 2px 0 0;
++    font-size: 0.9rem;
++    color: var(--db-color-text-primary);
++  }
++}
++
++.profile__section-title {
++  margin: 0 0 var(--db-space-md);
++  font-size: 1rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.profile__form {
++  display: flex;
++  flex-direction: column;
++}
++
++.profile__field {
++  width: 100%;
++}
++
++.profile__row {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: var(--db-space-md);
++}
++
++.profile__error {
++  background: color-mix(in srgb, var(--db-color-danger) 10%, transparent);
++  color: var(--db-color-danger);
++  border-radius: var(--db-radius-sm);
++  padding: var(--db-space-sm) var(--db-space-md);
++  font-size: 0.85rem;
++  margin-bottom: var(--db-space-md);
++}
++
++.profile__actions {
++  display: flex;
++  justify-content: flex-end;
++  margin-top: var(--db-space-sm);
++}
+diff --git a/src/app/features/profile/profile.component.ts b/src/app/features/profile/profile.component.ts
+index d491f30..30a830c 100644
+--- a/src/app/features/profile/profile.component.ts
++++ b/src/app/features/profile/profile.component.ts
+@@ -1,9 +1,122 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
++import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
++import { MatFormFieldModule } from '@angular/material/form-field';
++import { MatInputModule } from '@angular/material/input';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { MatSnackBar } from '@angular/material/snack-bar';
++import { AuthService } from '../../core/services/auth.service';
++import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
++import { FormErrorComponent } from '../../shared/components/form-error/form-error.component';
++import { passwordStrengthValidator, passwordsMatchValidator } from '../../shared/utils/password-validators';
+ 
+ @Component({
+   selector: 'app-profile',
+   standalone: true,
+-  template: `<p>Profile page lands here in Phase 9.</p>`,
++  imports: [
++    ReactiveFormsModule,
++    MatFormFieldModule,
++    MatInputModule,
++    MatButtonModule,
++    MatIconModule,
++    PageHeaderComponent,
++    FormErrorComponent,
++  ],
++  templateUrl: './profile.component.html',
++  styleUrl: './profile.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class ProfileComponent {}
++export class ProfileComponent {
++  private readonly fb = inject(FormBuilder);
++  private readonly authService = inject(AuthService);
++  private readonly snackBar = inject(MatSnackBar);
++
++  readonly currentUser = this.authService.currentUser;
++  readonly initials = computed(() => {
++    const user = this.currentUser();
++    return user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : '';
++  });
++
++  readonly savingProfile = signal(false);
++  readonly profileError = signal<string | null>(null);
++
++  readonly savingPassword = signal(false);
++  readonly passwordError = signal<string | null>(null);
++  readonly passwordSaved = signal(false);
++
++  readonly avatarNote = signal<string | null>(null);
++
++  readonly profileForm = this.fb.nonNullable.group({
++    firstName: [this.currentUser()?.firstName ?? '', [Validators.required]],
++    lastName: [this.currentUser()?.lastName ?? '', [Validators.required]],
++    email: [this.currentUser()?.email ?? '', [Validators.required, Validators.email]],
++  });
++
++  readonly passwordForm = this.fb.nonNullable.group(
++    {
++      currentPassword: ['', [Validators.required]],
++      newPassword: ['', [Validators.required, passwordStrengthValidator()]],
++      confirmPassword: ['', [Validators.required]],
++    },
++    { validators: [passwordsMatchValidator('newPassword', 'confirmPassword')] },
++  );
++
++  saveProfile(): void {
++    if (this.profileForm.invalid || this.savingProfile()) {
++      this.profileForm.markAllAsTouched();
++      return;
++    }
++    this.savingProfile.set(true);
++    this.profileError.set(null);
++
++    this.authService.updateProfile(this.profileForm.getRawValue()).subscribe({
++      next: () => {
++        this.savingProfile.set(false);
++        this.snackBar.open('Profile updated.', undefined, { duration: 3000 });
++      },
++      error: (error: Error) => {
++        this.savingProfile.set(false);
++        this.profileError.set(error.message);
++      },
++    });
++  }
++
++  changePassword(): void {
++    if (this.passwordForm.invalid || this.savingPassword()) {
++      this.passwordForm.markAllAsTouched();
++      return;
++    }
++    this.savingPassword.set(true);
++    this.passwordError.set(null);
++    this.passwordSaved.set(false);
++
++    const { currentPassword, newPassword } = this.passwordForm.getRawValue();
++    this.authService.changePassword(currentPassword, newPassword).subscribe({
++      next: () => {
++        this.savingPassword.set(false);
++        this.passwordSaved.set(true);
++        this.passwordForm.reset({ currentPassword: '', newPassword: '', confirmPassword: '' });
++        this.snackBar.open('Password changed.', undefined, { duration: 3000 });
++      },
++      error: (error: Error) => {
++        this.savingPassword.set(false);
++        this.passwordError.set(error.message);
++      },
++    });
++  }
++
++  /**
++   * Avatar upload isn't wired to real storage yet — no file upload backend
++   * exists (Phase 11). The control is here so the UI architecture supports
++   * it later without a rework: a real handler just needs to read the
++   * selected File and POST it instead of showing this note.
++   */
++  onAvatarSelected(event: Event): void {
++    const input = event.target as HTMLInputElement;
++    const file = input.files?.[0];
++    if (file) {
++      this.avatarNote.set(`"${file.name}" selected — avatar upload isn't available yet.`);
++    }
++    input.value = '';
++  }
++}
+diff --git a/src/app/features/settings/settings.component.html b/src/app/features/settings/settings.component.html
+new file mode 100644
+index 0000000..8c531fe
+--- /dev/null
++++ b/src/app/features/settings/settings.component.html
+@@ -0,0 +1,88 @@
++<app-page-header title="Settings" subtitle="Manage your preferences." />
++
++<div class="settings">
++  <section class="settings__card">
++    <h2 class="settings__section-title">Account</h2>
++    @if (currentUser(); as user) {
++      <div class="settings__account-row">
++        <span class="settings__account-email">{{ user.email }}</span>
++        <span class="settings__account-role">{{ user.role }}</span>
++      </div>
++    }
++    <a mat-stroked-button color="primary" routerLink="/profile" class="settings__account-link">
++      Edit profile
++    </a>
++  </section>
++
++  <section class="settings__card">
++    <h2 class="settings__section-title">Appearance</h2>
++    <div class="settings__toggle-row">
++      <div>
++        <span class="settings__toggle-label">Dark mode</span>
++        <p class="settings__toggle-hint">Switch the app to a dark color theme.</p>
++      </div>
++      <mat-slide-toggle
++        [checked]="darkMode()"
++        (change)="toggleDarkMode($event.checked)"
++      />
++    </div>
++  </section>
++
++  <section class="settings__card">
++    <h2 class="settings__section-title">Notifications</h2>
++    <div class="settings__toggle-row">
++      <div>
++        <span class="settings__toggle-label">Email notifications</span>
++        <p class="settings__toggle-hint">Receive a summary of activity by email.</p>
++      </div>
++      <mat-slide-toggle
++        [checked]="notificationPreferences().email"
++        (change)="toggleNotificationPreference('email', $event.checked)"
++      />
++    </div>
++    <div class="settings__toggle-row">
++      <div>
++        <span class="settings__toggle-label">Issue assignment notifications</span>
++        <p class="settings__toggle-hint">Get notified when an issue is assigned to you.</p>
++      </div>
++      <mat-slide-toggle
++        [checked]="notificationPreferences().issueAssignment"
++        (change)="toggleNotificationPreference('issueAssignment', $event.checked)"
++      />
++    </div>
++    <div class="settings__toggle-row">
++      <div>
++        <span class="settings__toggle-label">Comment notifications</span>
++        <p class="settings__toggle-hint">Get notified about new comments on your issues.</p>
++      </div>
++      <mat-slide-toggle
++        [checked]="notificationPreferences().comments"
++        (change)="toggleNotificationPreference('comments', $event.checked)"
++      />
++    </div>
++  </section>
++
++  <section class="settings__card">
++    <h2 class="settings__section-title">Security</h2>
++    <div class="settings__toggle-row">
++      <div>
++        <span class="settings__toggle-label">Password</span>
++        <p class="settings__toggle-hint">Change your password from your profile page.</p>
++      </div>
++      <a mat-stroked-button color="primary" routerLink="/profile">Change password</a>
++    </div>
++    <div class="settings__toggle-row">
++      <div>
++        <span class="settings__toggle-label">Sessions</span>
++        <p class="settings__toggle-hint">Sign out of DevBoard on all other devices.</p>
++      </div>
++      <button mat-stroked-button type="button" (click)="signOutAllDevices()">
++        <mat-icon>logout</mat-icon>
++        Sign out everywhere
++      </button>
++    </div>
++    @if (securityNote()) {
++      <p class="settings__note">{{ securityNote() }}</p>
++    }
++  </section>
++</div>
+diff --git a/src/app/features/settings/settings.component.scss b/src/app/features/settings/settings.component.scss
+new file mode 100644
+index 0000000..8338c52
+--- /dev/null
++++ b/src/app/features/settings/settings.component.scss
+@@ -0,0 +1,73 @@
++.settings {
++  display: flex;
++  flex-direction: column;
++  gap: var(--db-space-md);
++  max-width: 560px;
++}
++
++.settings__card {
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  padding: var(--db-space-lg);
++  box-shadow: var(--db-shadow-sm);
++}
++
++.settings__section-title {
++  margin: 0 0 var(--db-space-md);
++  font-size: 1rem;
++  font-weight: 600;
++  color: var(--db-color-text-primary);
++}
++
++.settings__account-row {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  padding-bottom: var(--db-space-md);
++  margin-bottom: var(--db-space-md);
++  border-bottom: 1px solid var(--db-color-border);
++}
++
++.settings__account-email {
++  font-size: 0.9rem;
++  color: var(--db-color-text-primary);
++}
++
++.settings__account-role {
++  font-size: 0.75rem;
++  color: var(--db-color-text-secondary);
++  text-transform: uppercase;
++  letter-spacing: 0.03em;
++}
++
++.settings__toggle-row {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: var(--db-space-md);
++  padding: var(--db-space-sm) 0;
++
++  &:not(:last-child) {
++    border-bottom: 1px solid var(--db-color-border);
++  }
++}
++
++.settings__toggle-label {
++  display: block;
++  font-size: 0.88rem;
++  font-weight: 500;
++  color: var(--db-color-text-primary);
++}
++
++.settings__toggle-hint {
++  margin: 2px 0 0;
++  font-size: 0.78rem;
++  color: var(--db-color-text-secondary);
++}
++
++.settings__note {
++  margin: var(--db-space-sm) 0 0;
++  font-size: 0.8rem;
++  color: var(--db-color-text-secondary);
++}
+diff --git a/src/app/features/settings/settings.component.ts b/src/app/features/settings/settings.component.ts
+index 50af8d8..c471228 100644
+--- a/src/app/features/settings/settings.component.ts
++++ b/src/app/features/settings/settings.component.ts
+@@ -1,9 +1,45 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
++import { RouterLink } from '@angular/router';
++import { MatSlideToggleModule } from '@angular/material/slide-toggle';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { AuthService } from '../../core/services/auth.service';
++import { NotificationPreferences, SettingsService } from '../../core/services/settings.service';
++import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+ 
+ @Component({
+   selector: 'app-settings',
+   standalone: true,
+-  template: `<p>Settings page lands here in Phase 9.</p>`,
++  imports: [RouterLink, MatSlideToggleModule, MatButtonModule, MatIconModule, PageHeaderComponent],
++  templateUrl: './settings.component.html',
++  styleUrl: './settings.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class SettingsComponent {}
++export class SettingsComponent {
++  private readonly settingsService = inject(SettingsService);
++  private readonly authService = inject(AuthService);
++
++  readonly currentUser = this.authService.currentUser;
++  readonly darkMode = this.settingsService.darkMode;
++  readonly notificationPreferences = this.settingsService.notificationPreferences;
++
++  readonly securityNote = signal<string | null>(null);
++
++  toggleDarkMode(enabled: boolean): void {
++    this.settingsService.setDarkMode(enabled);
++  }
++
++  toggleNotificationPreference(key: keyof NotificationPreferences, enabled: boolean): void {
++    this.settingsService.setNotificationPreference(key, enabled);
++  }
++
++  /**
++   * "Sign out of all devices" needs a backend session store to actually do
++   * anything (there's nothing here to revoke beyond this browser's own
++   * token). Surfaces that plainly instead of pretending to do something it
++   * can't yet — same pattern as login's forgot-password stub.
++   */
++  signOutAllDevices(): void {
++    this.securityNote.set("Signing out of other devices isn't available yet.");
++  }
++}

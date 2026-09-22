@@ -1,0 +1,47 @@
+<app-page-header title="Notifications" [subtitle]="unreadCount() + ' unread'">
+  @if (unreadCount() > 0) {
+    <button mat-button type="button" (click)="markAllAsRead()">
+      <mat-icon>done_all</mat-icon>
+      Mark all as read
+    </button>
+  }
+</app-page-header>
+
+@if (loading()) {
+  <app-loading-spinner message="Loading notifications..." />
+} @else if (notifications().length === 0) {
+  <app-empty-state icon="notifications_none" message="No notifications." />
+} @else {
+  <ul class="notification-list">
+    @for (notification of notifications(); track notification.id) {
+      <li
+        class="notification-item"
+        [class.notification-item--unread]="!notification.isRead"
+        role="button"
+        tabindex="0"
+        (click)="open(notification)"
+        (keydown.enter)="open(notification)"
+        (keydown.space)="$event.preventDefault(); open(notification)"
+      >
+        @if (!notification.isRead) {
+          <span class="notification-item__dot" aria-hidden="true"></span>
+        }
+        <mat-icon class="notification-item__icon">{{ icon(notification.type) }}</mat-icon>
+        <div class="notification-item__body">
+          <span class="notification-item__title">{{ notification.title }}</span>
+          <p class="notification-item__message">{{ notification.message }}</p>
+          <time class="notification-item__time">{{ notification.createdDate | relativeTime }}</time>
+        </div>
+        <button
+          mat-icon-button
+          type="button"
+          class="notification-item__clear"
+          (click)="clear(notification, $event)"
+          aria-label="Clear notification"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
+      </li>
+    }
+  </ul>
+}

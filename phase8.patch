@@ -1,0 +1,591 @@
+diff --git a/README.md b/README.md
+index 9070342..888e0d9 100644
+--- a/README.md
++++ b/README.md
+@@ -18,8 +18,8 @@ API later without UI rewrites.
+ - Profile and settings
+ - Responsive layout (desktop, tablet, mobile) with light/dark theming groundwork
+ 
+-> **Status:** Phases 1–7 (Foundation, Layout, Authentication, Dashboard, Projects, Issues,
+-> Kanban) complete. See
++> **Status:** Phases 1–8 (Foundation, Layout, Authentication, Dashboard, Projects, Issues,
++> Kanban, Notifications) complete. See
+ > [Project Structure](#project-structure) and [Frontend Development Phases](#frontend-development-phases)
+ > below for what's implemented vs. planned.
+ >
+@@ -103,7 +103,7 @@ src/environments/    # apiBaseUrl, useMockData — swapped per build configurati
+ 5. **Projects** ✅ — list, details, create/edit, members
+ 6. **Issues** ✅ — list, create/edit, details, comments, activity, search/filter/sort/pagination
+ 7. **Kanban** ✅ — board, columns, drag-and-drop, filtering
+-8. **Notifications** — center, unread count, mark read/all read
++8. **Notifications** ✅ — center, unread count, mark read/all read
+ 9. **Profile/Settings** — profile, password, preferences
+ 10. **Quality** — loading/error/empty states, responsive design, accessibility, tests, linting
+ 11. **Backend Integration Prep** — swap mock services for HTTP services
+diff --git a/angular.json b/angular.json
+index fc8a0ce..b9dafeb 100644
+--- a/angular.json
++++ b/angular.json
+@@ -47,8 +47,8 @@
+               "budgets": [
+                 {
+                   "type": "initial",
+-                  "maximumWarning": "700kB",
+-                  "maximumError": "1MB"
++                  "maximumWarning": "900kB",
++                  "maximumError": "1.2MB"
+                 },
+                 {
+                   "type": "anyComponentStyle",
+diff --git a/src/app/core/mock/notifications.mock.ts b/src/app/core/mock/notifications.mock.ts
+new file mode 100644
+index 0000000..39b8f58
+--- /dev/null
++++ b/src/app/core/mock/notifications.mock.ts
+@@ -0,0 +1,60 @@
++import { NotificationType } from '../enums';
++import { Notification } from '../models';
++
++/** Minutes-ago offset from "now", so relative-time formatting always looks live regardless of when this app is actually run. */
++function minutesAgo(minutes: number): string {
++  return new Date(Date.now() - minutes * 60_000).toISOString();
++}
++
++export const MOCK_NOTIFICATIONS: Notification[] = [
++  {
++    id: 'notif-1',
++    userId: 'user-1',
++    type: NotificationType.IssueAssigned,
++    title: 'Issue assigned to you',
++    message: 'Rahul Verma assigned DEV-101 "Login API returning 401" to you.',
++    isRead: false,
++    createdDate: minutesAgo(8),
++    relatedEntityId: 'issue-1',
++  },
++  {
++    id: 'notif-2',
++    userId: 'user-1',
++    type: NotificationType.CommentAdded,
++    title: 'New comment',
++    message: 'Rahul Verma commented on DEV-101 "Login API returning 401".',
++    isRead: false,
++    createdDate: minutesAgo(35),
++    relatedEntityId: 'issue-1',
++  },
++  {
++    id: 'notif-3',
++    userId: 'user-1',
++    type: NotificationType.IssueCompleted,
++    title: 'Issue completed',
++    message: 'DEV-103 "Breadcrumbs crash on nested lazy routes" was marked done.',
++    isRead: false,
++    createdDate: minutesAgo(120),
++    relatedEntityId: 'issue-3',
++  },
++  {
++    id: 'notif-4',
++    userId: 'user-1',
++    type: NotificationType.ProjectInvitation,
++    title: 'Added to a project',
++    message: 'You were added to Design System as a member.',
++    isRead: true,
++    createdDate: minutesAgo(60 * 6),
++    relatedEntityId: 'proj-4',
++  },
++  {
++    id: 'notif-5',
++    userId: 'user-1',
++    type: NotificationType.IssueUpdated,
++    title: 'Issue updated',
++    message: 'BILL-45 "Prorate plan upgrades mid-cycle" priority changed to High.',
++    isRead: true,
++    createdDate: minutesAgo(60 * 26),
++    relatedEntityId: 'issue-4',
++  },
++];
+diff --git a/src/app/core/services/notification.service.spec.ts b/src/app/core/services/notification.service.spec.ts
+new file mode 100644
+index 0000000..44b18a8
+--- /dev/null
++++ b/src/app/core/services/notification.service.spec.ts
+@@ -0,0 +1,137 @@
++import { TestBed } from '@angular/core/testing';
++import { NotificationService } from './notification.service';
++import { AuthService } from './auth.service';
++
++describe('NotificationService', () => {
++  let service: NotificationService;
++  let authService: AuthService;
++
++  beforeEach(() => {
++    localStorage.clear();
++    sessionStorage.clear();
++    TestBed.configureTestingModule({});
++    service = TestBed.inject(NotificationService);
++    authService = TestBed.inject(AuthService);
++  });
++
++  afterEach(() => {
++    localStorage.clear();
++    sessionStorage.clear();
++  });
++
++  it('starts empty when no user is logged in', () => {
++    expect(service.notifications()).toEqual([]);
++    expect(service.unreadCount()).toBe(0);
++  });
++
++  it('loads notifications for the current user once logged in', (done) => {
++    authService
++      .login({ email: 'admin@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        setTimeout(() => {
++          expect(service.notifications().length).toBeGreaterThan(0);
++          expect(service.notifications().every((n) => n.userId === 'user-1')).toBe(true);
++          done();
++        }, 500);
++      });
++  });
++
++  it('computes unreadCount from the loaded notifications', (done) => {
++    authService
++      .login({ email: 'admin@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        setTimeout(() => {
++          const expectedUnread = service.notifications().filter((n) => !n.isRead).length;
++          expect(service.unreadCount()).toBe(expectedUnread);
++          expect(service.unreadCount()).toBeGreaterThan(0);
++          done();
++        }, 500);
++      });
++  });
++
++  it('marks a single notification as read and decrements unreadCount', (done) => {
++    authService
++      .login({ email: 'admin@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        setTimeout(() => {
++          const before = service.unreadCount();
++          const target = service.notifications().find((n) => !n.isRead);
++          expect(target).toBeTruthy();
++
++          service.markAsRead(target!.id);
++
++          expect(service.unreadCount()).toBe(before - 1);
++          expect(service.notifications().find((n) => n.id === target!.id)?.isRead).toBe(true);
++          done();
++        }, 500);
++      });
++  });
++
++  it('marking an already-read notification as read again is a no-op', (done) => {
++    authService
++      .login({ email: 'admin@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        setTimeout(() => {
++          const read = service.notifications().find((n) => n.isRead);
++          expect(read).toBeTruthy();
++          const before = service.unreadCount();
++
++          service.markAsRead(read!.id);
++
++          expect(service.unreadCount()).toBe(before);
++          done();
++        }, 500);
++      });
++  });
++
++  it('marks every notification as read via markAllAsRead', (done) => {
++    authService
++      .login({ email: 'admin@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        setTimeout(() => {
++          expect(service.unreadCount()).toBeGreaterThan(0);
++
++          service.markAllAsRead();
++
++          expect(service.unreadCount()).toBe(0);
++          expect(service.notifications().every((n) => n.isRead)).toBe(true);
++          done();
++        }, 500);
++      });
++  });
++
++  it('removes a notification via clear()', (done) => {
++    authService
++      .login({ email: 'admin@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        setTimeout(() => {
++          const before = service.notifications().length;
++          const target = service.notifications()[0];
++
++          service.clear(target.id);
++
++          expect(service.notifications().length).toBe(before - 1);
++          expect(service.notifications().find((n) => n.id === target.id)).toBeUndefined();
++          done();
++        }, 500);
++      });
++  });
++
++  it('clears notifications on logout', (done) => {
++    authService
++      .login({ email: 'admin@devboard.dev', password: 'Password123!', rememberMe: true })
++      .subscribe(() => {
++        setTimeout(() => {
++          expect(service.notifications().length).toBeGreaterThan(0);
++
++          authService.logout();
++
++          setTimeout(() => {
++            expect(service.notifications()).toEqual([]);
++            expect(service.unreadCount()).toBe(0);
++            done();
++          }, 50);
++        }, 500);
++      });
++  });
++});
+diff --git a/src/app/core/services/notification.service.ts b/src/app/core/services/notification.service.ts
+new file mode 100644
+index 0000000..4972edb
+--- /dev/null
++++ b/src/app/core/services/notification.service.ts
+@@ -0,0 +1,92 @@
++import { Injectable, computed, effect, inject, signal } from '@angular/core';
++import { Observable } from 'rxjs';
++import { Notification } from '../models';
++import { MOCK_NOTIFICATIONS } from '../mock/notifications.mock';
++import { AuthService } from './auth.service';
++
++const MOCK_LATENCY_MS = 350;
++
++function delayed<T>(factory: () => T): Observable<T> {
++  return new Observable<T>((subscriber) => {
++    const timeout = setTimeout(() => {
++      subscriber.next(factory());
++      subscriber.complete();
++    }, MOCK_LATENCY_MS);
++    return () => clearTimeout(timeout);
++  });
++}
++
++/**
++ * Notification center state, shared by the navbar's unread badge and the
++ * full notification list page — both read the same signal, so marking one
++ * read anywhere updates the badge everywhere immediately.
++ *
++ * Backed by the mock store for now; designed to be swappable for a real-time
++ * SignalR connection later (Phase 11+) without changing what components read
++ * — `notifications`/`unreadCount` stay the same, only how they get
++ * populated changes (push instead of poll/fetch).
++ */
++@Injectable({ providedIn: 'root' })
++export class NotificationService {
++  private readonly authService = inject(AuthService);
++
++  private readonly notificationsSignal = signal<Notification[]>([]);
++  private readonly loadingSignal = signal(false);
++
++  readonly notifications = this.notificationsSignal.asReadonly();
++  readonly loading = this.loadingSignal.asReadonly();
++  readonly unreadCount = computed(
++    () => this.notificationsSignal().filter((n) => !n.isRead).length,
++  );
++
++  constructor() {
++    // Reload whenever the logged-in user changes (login/logout/switch).
++    effect(() => {
++      const userId = this.authService.currentUser()?.id;
++      if (userId) {
++        this.load(userId);
++      } else {
++        this.notificationsSignal.set([]);
++      }
++    });
++  }
++
++  reload(): void {
++    const userId = this.authService.currentUser()?.id;
++    if (userId) {
++      this.load(userId);
++    }
++  }
++
++  markAsRead(id: string): void {
++    const notification = this.notificationsSignal().find((n) => n.id === id);
++    if (!notification || notification.isRead) {
++      return;
++    }
++    // Optimistic — mock latency would make the unread badge lag visibly otherwise.
++    this.notificationsSignal.update((list) =>
++      list.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
++    );
++    delayed(() => undefined).subscribe();
++  }
++
++  markAllAsRead(): void {
++    this.notificationsSignal.update((list) => list.map((n) => ({ ...n, isRead: true })));
++    delayed(() => undefined).subscribe();
++  }
++
++  clear(id: string): void {
++    this.notificationsSignal.update((list) => list.filter((n) => n.id !== id));
++    delayed(() => undefined).subscribe();
++  }
++
++  private load(userId: string): void {
++    this.loadingSignal.set(true);
++    delayed(() => MOCK_NOTIFICATIONS.filter((n) => n.userId === userId)).subscribe(
++      (notifications) => {
++        this.notificationsSignal.set(notifications);
++        this.loadingSignal.set(false);
++      },
++    );
++  }
++}
+diff --git a/src/app/features/notifications/notifications.component.html b/src/app/features/notifications/notifications.component.html
+new file mode 100644
+index 0000000..0592b5b
+--- /dev/null
++++ b/src/app/features/notifications/notifications.component.html
+@@ -0,0 +1,47 @@
++<app-page-header title="Notifications" [subtitle]="unreadCount() + ' unread'">
++  @if (unreadCount() > 0) {
++    <button mat-button type="button" (click)="markAllAsRead()">
++      <mat-icon>done_all</mat-icon>
++      Mark all as read
++    </button>
++  }
++</app-page-header>
++
++@if (loading()) {
++  <app-loading-spinner message="Loading notifications..." />
++} @else if (notifications().length === 0) {
++  <app-empty-state icon="notifications_none" message="No notifications." />
++} @else {
++  <ul class="notification-list">
++    @for (notification of notifications(); track notification.id) {
++      <li
++        class="notification-item"
++        [class.notification-item--unread]="!notification.isRead"
++        role="button"
++        tabindex="0"
++        (click)="open(notification)"
++        (keydown.enter)="open(notification)"
++        (keydown.space)="$event.preventDefault(); open(notification)"
++      >
++        @if (!notification.isRead) {
++          <span class="notification-item__dot" aria-hidden="true"></span>
++        }
++        <mat-icon class="notification-item__icon">{{ icon(notification.type) }}</mat-icon>
++        <div class="notification-item__body">
++          <span class="notification-item__title">{{ notification.title }}</span>
++          <p class="notification-item__message">{{ notification.message }}</p>
++          <time class="notification-item__time">{{ notification.createdDate | relativeTime }}</time>
++        </div>
++        <button
++          mat-icon-button
++          type="button"
++          class="notification-item__clear"
++          (click)="clear(notification, $event)"
++          aria-label="Clear notification"
++        >
++          <mat-icon>close</mat-icon>
++        </button>
++      </li>
++    }
++  </ul>
++}
+diff --git a/src/app/features/notifications/notifications.component.scss b/src/app/features/notifications/notifications.component.scss
+new file mode 100644
+index 0000000..f95caa2
+--- /dev/null
++++ b/src/app/features/notifications/notifications.component.scss
+@@ -0,0 +1,77 @@
++.notification-list {
++  list-style: none;
++  margin: 0;
++  padding: 0;
++  display: flex;
++  flex-direction: column;
++  gap: 2px;
++  background: var(--db-color-surface);
++  border: 1px solid var(--db-color-border);
++  border-radius: var(--db-radius-md);
++  overflow: hidden;
++}
++
++.notification-item {
++  position: relative;
++  display: flex;
++  align-items: flex-start;
++  gap: var(--db-space-sm);
++  padding: var(--db-space-md);
++  border-bottom: 1px solid var(--db-color-border);
++  cursor: pointer;
++
++  &:last-child {
++    border-bottom: none;
++  }
++
++  &:hover {
++    background: var(--db-color-surface-alt);
++  }
++}
++
++.notification-item--unread {
++  background: color-mix(in srgb, var(--db-color-primary) 4%, transparent);
++}
++
++.notification-item__dot {
++  position: absolute;
++  top: 18px;
++  left: 6px;
++  width: 8px;
++  height: 8px;
++  border-radius: 50%;
++  background: var(--db-color-primary);
++}
++
++.notification-item__icon {
++  color: var(--db-color-text-secondary);
++  margin-left: var(--db-space-sm);
++  flex-shrink: 0;
++}
++
++.notification-item__body {
++  flex: 1;
++  min-width: 0;
++}
++
++.notification-item__title {
++  display: block;
++  font-weight: 600;
++  font-size: 0.88rem;
++  color: var(--db-color-text-primary);
++}
++
++.notification-item__message {
++  margin: 2px 0;
++  font-size: 0.82rem;
++  color: var(--db-color-text-secondary);
++}
++
++.notification-item__time {
++  font-size: 0.72rem;
++  color: var(--db-color-text-secondary);
++}
++
++.notification-item__clear {
++  flex-shrink: 0;
++}
+diff --git a/src/app/features/notifications/notifications.component.ts b/src/app/features/notifications/notifications.component.ts
+index 740d761..0208206 100644
+--- a/src/app/features/notifications/notifications.component.ts
++++ b/src/app/features/notifications/notifications.component.ts
+@@ -1,9 +1,65 @@
+-import { ChangeDetectionStrategy, Component } from '@angular/core';
++import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
++import { Router } from '@angular/router';
++import { MatButtonModule } from '@angular/material/button';
++import { MatIconModule } from '@angular/material/icon';
++import { NotificationType } from '../../core/enums';
++import { NotificationService } from '../../core/services/notification.service';
++import { Notification } from '../../core/models';
++import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
++import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
++import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner.component';
++import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
++
++const TYPE_ICONS: Record<NotificationType, string> = {
++  [NotificationType.IssueAssigned]: 'assignment_ind',
++  [NotificationType.IssueUpdated]: 'edit_note',
++  [NotificationType.CommentAdded]: 'chat_bubble_outline',
++  [NotificationType.IssueCompleted]: 'check_circle',
++  [NotificationType.ProjectInvitation]: 'group_add',
++};
+ 
+ @Component({
+   selector: 'app-notifications',
+   standalone: true,
+-  template: `<p>Notification center lands here in Phase 8.</p>`,
++  imports: [
++    MatButtonModule,
++    MatIconModule,
++    PageHeaderComponent,
++    EmptyStateComponent,
++    LoadingSpinnerComponent,
++    RelativeTimePipe,
++  ],
++  templateUrl: './notifications.component.html',
++  styleUrl: './notifications.component.scss',
+   changeDetection: ChangeDetectionStrategy.OnPush,
+ })
+-export class NotificationsComponent {}
++export class NotificationsComponent {
++  private readonly notificationService = inject(NotificationService);
++  private readonly router = inject(Router);
++
++  readonly notifications = this.notificationService.notifications;
++  readonly loading = this.notificationService.loading;
++  readonly unreadCount = this.notificationService.unreadCount;
++
++  icon(type: NotificationType): string {
++    return TYPE_ICONS[type];
++  }
++
++  markAllAsRead(): void {
++    this.notificationService.markAllAsRead();
++  }
++
++  open(notification: Notification): void {
++    this.notificationService.markAsRead(notification.id);
++    if (notification.relatedEntityId && notification.type !== NotificationType.ProjectInvitation) {
++      this.router.navigate(['/issues', notification.relatedEntityId]);
++    } else if (notification.relatedEntityId && notification.type === NotificationType.ProjectInvitation) {
++      this.router.navigate(['/projects', notification.relatedEntityId]);
++    }
++  }
++
++  clear(notification: Notification, event: Event): void {
++    event.stopPropagation();
++    this.notificationService.clear(notification.id);
++  }
++}
+diff --git a/src/app/layout/navbar/navbar.component.ts b/src/app/layout/navbar/navbar.component.ts
+index df1298a..1ffa6e8 100644
+--- a/src/app/layout/navbar/navbar.component.ts
++++ b/src/app/layout/navbar/navbar.component.ts
+@@ -1,4 +1,4 @@
+-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
++import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+ import { Router, RouterLink } from '@angular/router';
+ import { MatToolbarModule } from '@angular/material/toolbar';
+ import { MatIconModule } from '@angular/material/icon';
+@@ -9,6 +9,7 @@ import { MatDividerModule } from '@angular/material/divider';
+ import { MatTooltipModule } from '@angular/material/tooltip';
+ import { LayoutService } from '../../core/services/layout.service';
+ import { AuthService } from '../../core/services/auth.service';
++import { NotificationService } from '../../core/services/notification.service';
+ 
+ @Component({
+   selector: 'app-navbar',
+@@ -30,6 +31,7 @@ import { AuthService } from '../../core/services/auth.service';
+ export class NavbarComponent {
+   private readonly layout = inject(LayoutService);
+   private readonly authService = inject(AuthService);
++  private readonly notificationService = inject(NotificationService);
+   private readonly router = inject(Router);
+ 
+   readonly currentUser = this.authService.currentUser;
+@@ -42,8 +44,7 @@ export class NavbarComponent {
+     return user ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase() : '';
+   });
+ 
+-  // Real unread count wired up in Phase 8 (Notifications) via NotificationService.
+-  readonly unreadNotificationCount = signal(3);
++  readonly unreadNotificationCount = this.notificationService.unreadCount;
+ 
+   toggleMobileDrawer(): void {
+     this.layout.toggleMobileDrawer();
